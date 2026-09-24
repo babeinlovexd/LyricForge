@@ -47,11 +47,6 @@ pub fn calculate_syllables(text: &str, lang: &str) -> Vec<usize> {
     let re = Regex::new(r"[\p{L}]+").unwrap();
 
     for line in lines {
-        if line.trim().is_empty() {
-            results.push(0);
-            continue;
-        }
-
         let mut line_syllables = 0;
         for caps in re.captures_iter(line) {
             let word = caps.get(0).unwrap().as_str();
@@ -75,39 +70,53 @@ pub fn analyze_rhymes(text: &str, _lang: &str) -> RhymeAnalysisResult {
         word_matches.push(mat);
     }
 
+    // We need char indices, not byte indices, for JS interop
+    let mut current_char_idx = 0;
+    let mut byte_to_char = std::collections::HashMap::new();
+    for (b_idx, _) in text.char_indices() {
+        byte_to_char.insert(b_idx, current_char_idx);
+        current_char_idx += 1;
+    }
+    // and for end of string
+    byte_to_char.insert(text.len(), current_char_idx);
+
     if word_matches.len() > 1 {
         // Compare every pair to find rhymes
         for i in 0..word_matches.len() {
             for j in (i+1)..word_matches.len() {
                 let w1 = word_matches[i].as_str();
                 let w2 = word_matches[j].as_str();
+                let start1 = *byte_to_char.get(&word_matches[i].start()).unwrap_or(&0);
+                let end1 = *byte_to_char.get(&word_matches[i].end()).unwrap_or(&0);
+                let start2 = *byte_to_char.get(&word_matches[j].start()).unwrap_or(&0);
+                let end2 = *byte_to_char.get(&word_matches[j].end()).unwrap_or(&0);
 
                 if let (Some(ph1), Some(ph2)) = (dictionary::get_phonemes(w1), dictionary::get_phonemes(w2)) {
                     if let (Some(r1), Some(r2)) = (dictionary::extract_rhyme_part(&ph1), dictionary::extract_rhyme_part(&ph2)) {
                         if dictionary::is_pure_rhyme(&r1, &r2) {
                             matches.push(HighlightMatch {
                                 word: w1.to_string(),
-                                start: word_matches[i].start(),
-                                end: word_matches[i].end(),
+                                start: start1,
+                                end: end1,
                                 match_type: "green".to_string(),
                             });
                             matches.push(HighlightMatch {
                                 word: w2.to_string(),
-                                start: word_matches[j].start(),
-                                end: word_matches[j].end(),
+                                start: start2,
+                                end: end2,
                                 match_type: "green".to_string(),
                             });
                         } else if dictionary::is_assonance(&r1, &r2) {
                              matches.push(HighlightMatch {
                                 word: w1.to_string(),
-                                start: word_matches[i].start(),
-                                end: word_matches[i].end(),
+                                start: start1,
+                                end: end1,
                                 match_type: "yellow".to_string(),
                             });
                             matches.push(HighlightMatch {
                                 word: w2.to_string(),
-                                start: word_matches[j].start(),
-                                end: word_matches[j].end(),
+                                start: start2,
+                                end: end2,
                                 match_type: "yellow".to_string(),
                             });
                         } else {
@@ -116,14 +125,14 @@ pub fn analyze_rhymes(text: &str, _lang: &str) -> RhymeAnalysisResult {
                                 if v1 == v2 {
                                     matches.push(HighlightMatch {
                                         word: w1.to_string(),
-                                        start: word_matches[i].start(),
-                                        end: word_matches[i].end(),
+                                        start: start1,
+                                        end: end1,
                                         match_type: "purple".to_string(),
                                     });
                                     matches.push(HighlightMatch {
                                         word: w2.to_string(),
-                                        start: word_matches[j].start(),
-                                        end: word_matches[j].end(),
+                                        start: start2,
+                                        end: end2,
                                         match_type: "purple".to_string(),
                                     });
                                 }
