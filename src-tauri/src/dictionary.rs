@@ -4,12 +4,41 @@ use lazy_static::lazy_static;
 
 lazy_static! {
     static ref EN_DICT: Mutex<HashMap<String, Vec<String>>> = Mutex::new(HashMap::new());
+    static ref DE_DICT: Mutex<HashMap<String, Vec<String>>> = Mutex::new(HashMap::new());
 }
 
 pub fn init_dictionary() {
     let mut dict = EN_DICT.lock().unwrap();
     if !dict.is_empty() {
         return;
+    }
+
+    // Mock German Dict for standard rhyme combinations
+    let mut de_dict = DE_DICT.lock().unwrap();
+    let de_mock_entries = vec![
+        ("haus", vec!["HH", "AW1", "S"]),
+        ("maus", vec!["M", "AW1", "S"]),
+        ("raus", vec!["R", "AW1", "S"]),
+        ("kalt", vec!["K", "AA1", "L", "T"]),
+        ("gestalt", vec!["G", "EH0", "SH", "T", "AA1", "L", "T"]),
+        ("nacht", vec!["N", "AA1", "CH", "T"]),
+        ("wacht", vec!["V", "AA1", "CH", "T"]),
+        ("macht", vec!["M", "AA1", "CH", "T"]),
+        ("regen", vec!["R", "EY1", "G", "EH0", "N"]),
+        ("segen", vec!["Z", "EY1", "G", "EH0", "N"]),
+        ("traum", vec!["T", "R", "AW1", "M"]),
+        ("laut", vec!["L", "AW1", "T"]), // Assonance to traum
+        ("stern", vec!["SH", "T", "EH1", "R", "N"]),
+        ("berg", vec!["B", "EH1", "R", "G"]), // Assonance to stern
+        ("funke", vec!["F", "UH1", "N", "K", "EH0"]),
+        ("dunkel", vec!["D", "UH1", "N", "K", "EH0", "L"]), // Vocal harmony
+        ("leid", vec!["L", "AY1", "D"]),
+        ("streit", vec!["SH", "T", "R", "AY1", "T"]), // Vocal harmony/assonance depending on 'D'/'T'
+        ("asphalt", vec!["AA0", "S", "F", "AA1", "L", "T"]),
+        ("bitterkalt", vec!["B", "IH0", "T", "ER0", "K", "AA1", "L", "T"]),
+    ];
+    for (w, p) in de_mock_entries {
+        de_dict.insert(w.to_string(), p.iter().map(|&s| s.to_string()).collect());
     }
 
     // Load CMUdict from embedded resource
@@ -34,8 +63,16 @@ pub fn init_dictionary() {
 }
 
 pub fn get_phonemes(word: &str) -> Option<Vec<String>> {
-    let dict = EN_DICT.lock().unwrap();
-    dict.get(&word.to_lowercase()).cloned()
+    // Try EN first, then DE for simplicity in this demo.
+    let en_dict = EN_DICT.lock().unwrap();
+    if let Some(p) = en_dict.get(&word.to_lowercase()) {
+        return Some(p.clone());
+    }
+    let de_dict = DE_DICT.lock().unwrap();
+    if let Some(p) = de_dict.get(&word.to_lowercase()) {
+        return Some(p.clone());
+    }
+    None
 }
 
 // Simple rhyme extraction:
@@ -101,39 +138,46 @@ pub fn get_all_rhymes(word: &str, mode: &str) -> Vec<String> {
     }
     let target_rhyme_part = target_rhyme_part.unwrap();
 
-    let dict = EN_DICT.lock().unwrap();
     let mut results = Vec::new();
 
-    for (dict_word, phonemes) in dict.iter() {
-        if dict_word == &word.to_lowercase() {
-            continue;
-        }
+    let en_dict = EN_DICT.lock().unwrap();
+    let de_dict = DE_DICT.lock().unwrap();
 
-        if let Some(rhyme_part) = extract_rhyme_part(phonemes) {
-            match mode {
-                "rein" => {
-                    if is_pure_rhyme(&target_rhyme_part, &rhyme_part) {
-                        results.push(dict_word.clone());
-                    }
-                }
-                "assonanz" => {
-                    if is_assonance(&target_rhyme_part, &rhyme_part) {
-                        results.push(dict_word.clone());
-                    }
-                }
-                "vokalklang" => {
-                    let target_vowel = get_vowel(&target_phonemes);
-                    let dict_vowel = get_vowel(phonemes);
-                    if let (Some(v1), Some(v2)) = (target_vowel, dict_vowel) {
-                        if v1 == v2 {
+    let mut check_dict = |dict: &HashMap<String, Vec<String>>| {
+        for (dict_word, phonemes) in dict.iter() {
+            if dict_word == &word.to_lowercase() {
+                continue;
+            }
+
+            if let Some(rhyme_part) = extract_rhyme_part(phonemes) {
+                match mode {
+                    "rein" => {
+                        if is_pure_rhyme(&target_rhyme_part, &rhyme_part) {
                             results.push(dict_word.clone());
                         }
                     }
+                    "assonanz" => {
+                        if is_assonance(&target_rhyme_part, &rhyme_part) {
+                            results.push(dict_word.clone());
+                        }
+                    }
+                    "vokalklang" => {
+                        let target_vowel = get_vowel(&target_phonemes);
+                        let dict_vowel = get_vowel(phonemes);
+                        if let (Some(v1), Some(v2)) = (target_vowel, dict_vowel) {
+                            if v1 == v2 {
+                                results.push(dict_word.clone());
+                            }
+                        }
+                    }
+                    _ => {}
                 }
-                _ => {}
             }
         }
-    }
+    };
+
+    check_dict(&en_dict);
+    check_dict(&de_dict);
 
     results.sort();
     results.dedup();

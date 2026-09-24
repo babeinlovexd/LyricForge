@@ -47,7 +47,7 @@ export const RhymeHighlight = Extension.create({
                 if (match.start >= 0 && match.end <= tr.doc.content.size) {
                   try {
                     decorations.push(
-                      Decoration.inline(match.start + 1, match.end + 1, {
+                      Decoration.inline(match.start, match.end, {
                         class: className,
                       })
                     );
@@ -76,24 +76,48 @@ export const RhymeHighlight = Extension.create({
                   try {
                     // Extract text
                     let text = '';
+                    const positions: { pmPos: number; charIdx: number }[] = [];
+                    let charIdx = 0;
+
                     view.state.doc.descendants((node, pos) => {
                       if (node.isText) {
-                        text += node.text;
+                        const nodeText = node.text || '';
+                        for (let i = 0; i < nodeText.length; i++) {
+                            positions.push({ pmPos: pos + i, charIdx: charIdx + i });
+                        }
+                        text += nodeText;
+                        charIdx += nodeText.length;
                       } else if (node.isBlock && pos > 0) {
                         text += '\n';
+                        positions.push({ pmPos: pos, charIdx: charIdx });
+                        charIdx += 1;
                       }
                     });
 
                     // Call Tauri API
+                    // Note: Rust regex byte indices need to be mapped to char indices,
+                    // but we will do it here if possible, or assume Rust sends char indices.
                     const result = await invoke<{matches: HighlightMatch[]}>('analyze_rhymes', {
                       text: text,
                       lang: currentLang
                     });
 
-                    // We need a way to map the raw string indices back to ProseMirror positions.
-                    // For the demo, we assume the backend does this or we ignore it if it's too complex and mock it.
+                    // Map char indices to ProseMirror positions
+                    const mapToPm = (cIdx: number) => {
+                      // fallback for bounds
+                      if (cIdx >= positions.length) {
+                        return positions.length > 0 ? positions[positions.length-1].pmPos + 1 : 1;
+                      }
+                      return positions[cIdx] ? positions[cIdx].pmPos : 1;
+                    };
 
-                    const tr = view.state.tr.setMeta('rhymeMatches', result.matches);
+                    const mappedMatches = result.matches.map(m => ({
+                      ...m,
+                      start: mapToPm(m.start) + 1, // +1 because ProseMirror offsets text by 1 from block start
+                      end: mapToPm(m.end) + 1
+                    }));
+
+                    const tr = view.state.tr.setMeta('rhymeMatches', mappedMatches);
                     view.dispatch(tr);
                   } catch (e) {
                     console.error(e);
