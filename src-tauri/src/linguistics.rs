@@ -109,17 +109,20 @@ pub fn analyze_rhymes(text: &str, lang: &str) -> RhymeAnalysisResult {
     byte_to_char.insert(text.len(), current_char_idx);
 
     // Extract line ends for priority highlighting
-    let lines: Vec<&str> = text.split('\n').collect();
     let mut line_end_indices = std::collections::HashSet::new();
-    for line in lines {
+    let mut line_offset = 0;
+
+    for line in text.split('\n') {
         if let Some(mat) = re.find_iter(line).last() {
-            // Find this match in the global word_matches list
+            let absolute_start = line_offset + mat.start();
             for (idx, w_match) in word_matches.iter().enumerate() {
-                if w_match.as_str() == mat.as_str() {
+                if w_match.start() == absolute_start {
                     line_end_indices.insert(idx);
+                    break;
                 }
             }
         }
+        line_offset += line.len() + 1; // +1 für '\n'
     }
 
     // Stop words to ignore for standalone matches

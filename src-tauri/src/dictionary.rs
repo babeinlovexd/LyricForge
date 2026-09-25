@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::sync::Mutex;
+use std::sync::{Mutex, OnceLock};
 use lazy_static::lazy_static;
 
 lazy_static! {
@@ -7,12 +7,10 @@ lazy_static! {
     static ref DE_DICT: Mutex<HashMap<String, Vec<String>>> = Mutex::new(HashMap::new());
 }
 
-pub fn init_dictionary() {
-    let mut dict = EN_DICT.lock().unwrap();
-    if !dict.is_empty() {
-        return;
-    }
+static DICTIONARY_INIT: OnceLock<()> = OnceLock::new();
 
+pub fn init_dictionary() {
+    DICTIONARY_INIT.get_or_init(|| {
     // Mock German Dict for standard rhyme combinations
     let mut de_dict = DE_DICT.lock().unwrap();
     let de_mock_entries = vec![
@@ -59,6 +57,7 @@ pub fn init_dictionary() {
         de_dict.insert(w.to_string(), p.iter().map(|&s| s.to_string()).collect());
     }
 
+    let mut dict = EN_DICT.lock().unwrap();
     // Load CMUdict from embedded resource
     let cmudict_data = include_str!("../resources/cmudict.txt");
     for line in cmudict_data.lines() {
@@ -78,6 +77,7 @@ pub fn init_dictionary() {
             dict.insert(word, phonemes);
         }
     }
+    });
 }
 
 pub fn get_phonemes(word: &str, lang: &str) -> Option<Vec<String>> {
