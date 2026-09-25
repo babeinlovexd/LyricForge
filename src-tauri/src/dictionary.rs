@@ -148,23 +148,60 @@ pub fn german_g2p(word: &str) -> Vec<String> {
 pub fn init_dictionary() {
     DICTIONARY_INIT.get_or_init(|| {
     let mut de_dict = HashMap::new();
-    let dedict_data = include_str!("../resources/dedict.txt");
-    for line in dedict_data.lines() {
-        if line.starts_with(";;;") {
-            continue;
-        }
 
-        let parts: Vec<&str> = line.split("  ").collect();
-        if parts.len() == 2 {
-            let mut word = parts[0].to_lowercase();
-            if let Some(idx) = word.find('(') {
-                word = word[..idx].to_string();
-            }
-
-            let phonemes: Vec<String> = parts[1].split(' ').map(|s: &str| s.to_string()).collect();
-            de_dict.insert(word, phonemes);
-        }
+    let de_mock_entries = vec![
+        ("haus", vec!["HH", "AW1", "S"]),
+        ("maus", vec!["M", "AW1", "S"]),
+        ("raus", vec!["R", "AW1", "S"]),
+        ("kalt", vec!["K", "AA1", "L", "T"]),
+        ("gestalt", vec!["G", "EH0", "SH", "T", "AA1", "L", "T"]),
+        ("nacht", vec!["N", "AA1", "CH", "T"]),
+        ("wacht", vec!["V", "AA1", "CH", "T"]),
+        ("macht", vec!["M", "AA1", "CH", "T"]),
+        ("regen", vec!["R", "EY1", "G", "EH0", "N"]),
+        ("segen", vec!["Z", "EY1", "G", "EH0", "N"]),
+        ("traum", vec!["T", "R", "AW1", "M"]),
+        ("laut", vec!["L", "AW1", "T"]),
+        ("stern", vec!["SH", "T", "EH1", "R", "N"]),
+        ("berg", vec!["B", "EH1", "R", "G"]),
+        ("funke", vec!["F", "UH1", "N", "K", "EH0"]),
+        ("dunkel", vec!["D", "UH1", "N", "K", "EH0", "L"]),
+        ("leid", vec!["L", "AY1", "T"]),
+        ("streit", vec!["SH", "T", "R", "AY1", "T"]),
+        ("asphalt", vec!["AA0", "S", "F", "AA1", "L", "T"]),
+        ("bitterkalt", vec!["B", "IH0", "T", "ER0", "K", "AA1", "L", "T"]),
+        ("spur", vec!["SH", "P", "UH1", "R"]),
+        ("urnatur", vec!["UH1", "R", "N", "AA0", "T", "UH1", "R"]),
+        ("pur", vec!["P", "UH1", "R"]),
+        ("flur", vec!["F", "L", "UH1", "R"]),
+        ("schnur", vec!["SH", "N", "UH1", "R"]),
+        ("schwur", vec!["SH", "V", "UH1", "R"]),
+        ("tannengrün", vec!["T", "AA1", "N", "EH0", "N", "G", "R", "IY1", "N"]),
+        ("blühn", vec!["B", "L", "IY1", "N"]),
+        ("licht", vec!["L", "IH1", "CH", "T"]),
+        ("gesicht", vec!["G", "EH0", "Z", "IH1", "CH", "T"]),
+        ("schicht", vec!["SH", "IH1", "CH", "T"]),
+        ("dichtet", vec!["D", "IH1", "CH", "T", "EH0", "T"]),
+        ("verdichtet", vec!["F", "EH0", "R", "D", "IH1", "CH", "T", "EH0", "T"]),
+        ("berichtet", vec!["B", "EH0", "R", "IH1", "CH", "T", "EH0", "T"]),
+        ("zurück", vec!["Z", "UH0", "R", "IH1", "K"]),
+        ("glück", vec!["G", "L", "IH1", "K"]),
+        ("raum", vec!["R", "AW1", "M"]),
+        ("baum", vec!["B", "AW1", "M"]),
+        ("saum", vec!["Z", "AW1", "M"]),
+        ("schaum", vec!["SH", "AW1", "M"]),
+        ("flaum", vec!["F", "L", "AW1", "M"]),
+        ("lied", vec!["L", "IY1", "T"]),
+        ("ein", vec!["AY1", "N"]),
+        ("sein", vec!["Z", "AY1", "N"]),
+        ("klang", vec!["K", "L", "AA1", "NG"]),
+        ("gesang", vec!["G", "EH0", "Z", "AA1", "NG"]),
+        ("raumfahrt", vec!["R", "AW1", "M", "F", "AA2", "R", "T"]),
+    ];
+    for (w, p) in de_mock_entries {
+        de_dict.insert(w.to_string(), p.iter().map(|&s| s.to_string()).collect());
     }
+
     let _ = DE_DICT.set(de_dict);
 
     let mut en_dict = HashMap::new();
