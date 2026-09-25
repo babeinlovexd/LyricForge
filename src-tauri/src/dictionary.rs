@@ -1,18 +1,14 @@
 use std::collections::HashMap;
-use std::sync::{Mutex, OnceLock};
-use lazy_static::lazy_static;
+use std::sync::OnceLock;
 
-lazy_static! {
-    static ref EN_DICT: Mutex<HashMap<String, Vec<String>>> = Mutex::new(HashMap::new());
-    static ref DE_DICT: Mutex<HashMap<String, Vec<String>>> = Mutex::new(HashMap::new());
-}
-
+static EN_DICT: OnceLock<HashMap<String, Vec<String>>> = OnceLock::new();
+static DE_DICT: OnceLock<HashMap<String, Vec<String>>> = OnceLock::new();
 static DICTIONARY_INIT: OnceLock<()> = OnceLock::new();
 
 pub fn init_dictionary() {
     DICTIONARY_INIT.get_or_init(|| {
     // Mock German Dict for standard rhyme combinations
-    let mut de_dict = DE_DICT.lock().unwrap();
+    let mut de_dict = HashMap::new();
     let de_mock_entries = vec![
         ("haus", vec!["HH", "AW1", "S"]),
         ("maus", vec!["M", "AW1", "S"]),
@@ -56,8 +52,9 @@ pub fn init_dictionary() {
     for (w, p) in de_mock_entries {
         de_dict.insert(w.to_string(), p.iter().map(|&s| s.to_string()).collect());
     }
+    let _ = DE_DICT.set(de_dict);
 
-    let mut dict = EN_DICT.lock().unwrap();
+    let mut dict = HashMap::new();
     // Load CMUdict from embedded resource
     let cmudict_data = include_str!("../resources/cmudict.txt");
     for line in cmudict_data.lines() {
@@ -77,13 +74,14 @@ pub fn init_dictionary() {
             dict.insert(word, phonemes);
         }
     }
+    let _ = EN_DICT.set(dict);
     });
 }
 
 pub fn get_phonemes(word: &str, lang: &str) -> Option<Vec<String>> {
     let word_lower = word.to_lowercase();
-    let en_dict = EN_DICT.lock().unwrap();
-    let de_dict = DE_DICT.lock().unwrap();
+    let en_dict = EN_DICT.get()?;
+    let de_dict = DE_DICT.get()?;
 
     if lang == "de" || lang == "DE" {
         if let Some(p) = de_dict.get(&word_lower) { return Some(p.clone()); }
@@ -167,8 +165,8 @@ pub fn get_all_rhymes(word: &str, mode: &str, lang: &str) -> Vec<(String, String
 
     let mut results = Vec::new();
 
-    let en_dict = EN_DICT.lock().unwrap();
-    let de_dict = DE_DICT.lock().unwrap();
+    let en_dict = EN_DICT.get().unwrap();
+    let de_dict = DE_DICT.get().unwrap();
 
     let mut check_dict = |dict: &HashMap<String, Vec<String>>, lang_tag: &str| {
         for (dict_word, phonemes) in dict.iter() {
