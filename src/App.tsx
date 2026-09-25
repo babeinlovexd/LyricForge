@@ -32,11 +32,11 @@ function App() {
           <div className="flex items-center gap-4">
             <img src="/LF.png" alt="LyricForge Logo" className="w-16 h-16 object-contain drop-shadow-md" />
             <div>
-              <h1 className="text-4xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-br from-blue-400 via-indigo-400 to-purple-500">
-                LyricForge
+              <h1 className="text-4xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-br from-gray-300 via-gray-400 to-green-500">
+                LYRICFORGE
               </h1>
               <p className="text-gray-400 text-sm font-medium mt-1 uppercase tracking-widest">
-                Modular Songwriting & Analysis
+                Modular Songwriting & Metrik-Analyse
               </p>
             </div>
           </div>

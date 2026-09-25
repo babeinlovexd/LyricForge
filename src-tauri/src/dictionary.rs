@@ -36,6 +36,18 @@ pub fn init_dictionary() {
         ("streit", vec!["SH", "T", "R", "AY1", "T"]), // Vocal harmony/assonance depending on 'D'/'T'
         ("asphalt", vec!["AA0", "S", "F", "AA1", "L", "T"]),
         ("bitterkalt", vec!["B", "IH0", "T", "ER0", "K", "AA1", "L", "T"]),
+        ("spur", vec!["SH", "P", "UH1", "R"]),
+        ("urnatur", vec!["UH1", "R", "N", "AA0", "T", "UH1", "R"]),
+        ("pur", vec!["P", "UH1", "R"]),
+        ("flur", vec!["F", "L", "UH1", "R"]),
+        ("schnur", vec!["SH", "N", "UH1", "R"]),
+        ("schwur", vec!["SH", "V", "UH1", "R"]),
+        ("tannengrün", vec!["T", "AA1", "N", "EH0", "N", "G", "R", "IY1", "N"]),
+        ("blühn", vec!["B", "L", "IY1", "N"]),
+        ("licht", vec!["L", "IH1", "CH", "T"]),
+        ("gesicht", vec!["G", "EH0", "Z", "IH1", "CH", "T"]),
+        ("zurück", vec!["Z", "UH0", "R", "IH1", "K"]),
+        ("glück", vec!["G", "L", "IH1", "K"]),
     ];
     for (w, p) in de_mock_entries {
         de_dict.insert(w.to_string(), p.iter().map(|&s| s.to_string()).collect());
@@ -126,7 +138,8 @@ pub fn get_vowel(phonemes: &[String]) -> Option<String> {
 }
 
 // Group rhyme results
-pub fn get_all_rhymes(word: &str, mode: &str) -> Vec<String> {
+// Tuple structure: (word, lang_tag)
+pub fn get_all_rhymes(word: &str, mode: &str) -> Vec<(String, String)> {
     let target_phonemes = get_phonemes(word);
     if target_phonemes.is_none() {
         return vec![];
@@ -143,7 +156,7 @@ pub fn get_all_rhymes(word: &str, mode: &str) -> Vec<String> {
     let en_dict = EN_DICT.lock().unwrap();
     let de_dict = DE_DICT.lock().unwrap();
 
-    let mut check_dict = |dict: &HashMap<String, Vec<String>>| {
+    let mut check_dict = |dict: &HashMap<String, Vec<String>>, lang_tag: &str| {
         for (dict_word, phonemes) in dict.iter() {
             if dict_word == &word.to_lowercase() {
                 continue;
@@ -153,12 +166,12 @@ pub fn get_all_rhymes(word: &str, mode: &str) -> Vec<String> {
                 match mode {
                     "rein" => {
                         if is_pure_rhyme(&target_rhyme_part, &rhyme_part) {
-                            results.push(dict_word.clone());
+                            results.push((dict_word.clone(), lang_tag.to_string()));
                         }
                     }
                     "assonanz" => {
                         if is_assonance(&target_rhyme_part, &rhyme_part) {
-                            results.push(dict_word.clone());
+                            results.push((dict_word.clone(), lang_tag.to_string()));
                         }
                     }
                     "vokalklang" => {
@@ -166,7 +179,7 @@ pub fn get_all_rhymes(word: &str, mode: &str) -> Vec<String> {
                         let dict_vowel = get_vowel(phonemes);
                         if let (Some(v1), Some(v2)) = (target_vowel, dict_vowel) {
                             if v1 == v2 {
-                                results.push(dict_word.clone());
+                                results.push((dict_word.clone(), lang_tag.to_string()));
                             }
                         }
                     }
@@ -176,8 +189,8 @@ pub fn get_all_rhymes(word: &str, mode: &str) -> Vec<String> {
         }
     };
 
-    check_dict(&en_dict);
-    check_dict(&de_dict);
+    check_dict(&en_dict, "EN");
+    check_dict(&de_dict, "DE");
 
     results.sort();
     results.dedup();

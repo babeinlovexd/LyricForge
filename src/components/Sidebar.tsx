@@ -3,14 +3,20 @@ import { invoke } from '@tauri-apps/api/core';
 import { X } from 'lucide-react';
 import { useAppStore } from '../store';
 
+interface RhymeWord {
+  word: string;
+  lang: string;
+}
+
 interface RhymeResultGrouped {
   syllables: number;
-  words: string[];
+  words: RhymeWord[];
 }
 
 export const Sidebar: React.FC = () => {
   const { isSidebarOpen, setSidebarOpen, activeWord, activeBlockId, project, updateBlock } = useAppStore();
   const [activeTab, setActiveTab] = useState<'Rein' | 'Assonanz' | 'Vokalklang'>('Rein');
+  const [langFilter, setLangFilter] = useState<'Alle' | 'DE' | 'EN'>('Alle');
   const [results, setResults] = useState<RhymeResultGrouped[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -80,16 +86,29 @@ export const Sidebar: React.FC = () => {
         </div>
       </div>
 
-      <div className="flex border-b border-[#333]">
-        {(['Rein', 'Assonanz', 'Vokalklang'] as const).map(tab => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={`flex-1 py-2 text-sm text-center ${activeTab === tab ? 'bg-[#333] text-white font-bold' : 'text-gray-500 hover:bg-[#222]'}`}
-          >
-            {tab}
-          </button>
-        ))}
+      <div className="flex flex-col border-b border-[#333]">
+        <div className="flex">
+          {(['Rein', 'Assonanz', 'Vokalklang'] as const).map(tab => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`flex-1 py-2 text-xs font-medium text-center transition-colors ${activeTab === tab ? 'bg-[#333] text-white border-b-2 border-blue-400' : 'text-gray-500 hover:bg-[#222]'}`}
+            >
+              {tab}
+            </button>
+          ))}
+        </div>
+        <div className="flex bg-[#1e1e1e] border-t border-[#2a2a2a]">
+          {(['Alle', 'DE', 'EN'] as const).map(lang => (
+            <button
+              key={lang}
+              onClick={() => setLangFilter(lang)}
+              className={`flex-1 py-1.5 text-[10px] uppercase tracking-widest text-center transition-colors ${langFilter === lang ? 'bg-[#2a2a2a] text-white font-bold' : 'text-gray-500 hover:bg-[#222]'}`}
+            >
+              Nur {lang === 'Alle' ? 'Alle' : lang}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto p-4">
@@ -98,26 +117,32 @@ export const Sidebar: React.FC = () => {
         ) : results.length === 0 ? (
           <div className="text-center text-gray-500 py-8">Keine Ergebnisse gefunden.</div>
         ) : (
-          results.map((group) => (
-            <div key={group.syllables} className="mb-4">
-              <h3 className="text-sm font-bold text-gray-400 mb-2 border-b border-[#333] pb-1 flex items-center">
-                <span className="mr-2">▼</span> {group.syllables} {group.syllables === 1 ? 'Silbe' : 'Silben'}
-              </h3>
-              <div className="flex flex-wrap gap-2">
-                {group.words.map((word, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => handleWordClick(word)}
-                    onContextMenu={(e) => handleWordRightClick(e, word)}
-                    className="bg-[#2a2a2a] hover:bg-[#3a3a3a] text-sm px-2 py-1 rounded text-gray-300 hover:text-white transition-colors border border-[#444]"
-                    title="Klick: Einfügen, Rechtsklick: Kopieren"
-                  >
-                    {word}
-                  </button>
-                ))}
+          results.map((group) => {
+            const filteredWords = group.words.filter(w => langFilter === 'Alle' || w.lang === langFilter);
+            if (filteredWords.length === 0) return null;
+
+            return (
+              <div key={group.syllables} className="mb-4">
+                <h3 className="text-sm font-bold text-gray-400 mb-2 border-b border-[#333] pb-1 flex items-center">
+                  <span className="mr-2 text-xs">▼</span> {group.syllables} {group.syllables === 1 ? 'Silbe' : 'Silben'}
+                </h3>
+                <div className="flex flex-wrap gap-2">
+                  {filteredWords.map((rw, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => handleWordClick(rw.word)}
+                      onContextMenu={(e) => handleWordRightClick(e, rw.word)}
+                      className="bg-[#2a2a2a] hover:bg-[#3a3a3a] text-sm pl-2 pr-1 py-1 rounded text-gray-300 hover:text-white transition-colors border border-[#444] flex items-center gap-1 group/btn"
+                      title={`Klick: Einfügen, Rechtsklick: Kopieren (${rw.lang})`}
+                    >
+                      {rw.word}
+                      <span className="text-[9px] font-mono text-gray-500 group-hover/btn:text-gray-400 opacity-50 px-1 bg-[#111] rounded">{rw.lang}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
     </div>
