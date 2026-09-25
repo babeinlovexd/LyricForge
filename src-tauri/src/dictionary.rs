@@ -93,6 +93,19 @@ pub fn get_phonemes(word: &str, lang: &str) -> Option<Vec<String>> {
     None
 }
 
+// Get all vowels for multi-syllable vocal harmony checks
+pub fn get_all_vowels(phonemes: &[String]) -> Vec<String> {
+    let mut vowels = Vec::new();
+    for p in phonemes.iter() {
+        if p.ends_with('1') || p.ends_with('2') || p.ends_with('0') {
+            if p.len() >= 2 {
+                vowels.push(p[..2].to_string());
+            }
+        }
+    }
+    vowels
+}
+
 // Simple rhyme extraction:
 // We look for the LAST primary stress (vowel ending in '1') to correctly match multi-syllable compound words
 pub fn extract_rhyme_part(phonemes: &[String]) -> Option<Vec<String>> {

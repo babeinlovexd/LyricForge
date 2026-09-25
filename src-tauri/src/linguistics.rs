@@ -13,7 +13,8 @@ pub struct HighlightMatch {
     pub word: String,
     pub start: usize,
     pub end: usize,
-    pub match_type: String, // "green", "yellow", "purple"
+    pub match_type: String, // "moss-green", "light-green", "yellow", "purple"
+    pub group_id: usize,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -90,7 +91,6 @@ pub fn calculate_syllables(text: &str, lang: &str) -> Vec<usize> {
 pub fn analyze_rhymes(text: &str, lang: &str) -> RhymeAnalysisResult {
     dictionary::init_dictionary();
 
-    let mut matches = Vec::new();
     let re = Regex::new(r"[\p{L}]+").unwrap();
 
     let mut word_matches = Vec::new();
@@ -128,10 +128,43 @@ pub fn analyze_rhymes(text: &str, lang: &str) -> RhymeAnalysisResult {
     // Stop words to ignore for standalone matches
     let stop_words = vec!["der", "die", "das", "ein", "eine", "in", "im", "den", "dem", "mich", "und", "oder", "ist", "sind", "ich", "du", "er", "sie", "es", "wir", "ihr"];
 
+    // Map words to lines to check distance (max 4 lines)
+    let lines: Vec<&str> = text.split('\n').collect();
+    let mut word_to_line = std::collections::HashMap::new();
+    let mut current_line = 0;
+    let mut current_line_offset = 0;
+
+    for (idx, w_match) in word_matches.iter().enumerate() {
+        while current_line < lines.len() {
+            let line_len = lines[current_line].len();
+            if w_match.start() >= current_line_offset && w_match.start() <= current_line_offset + line_len {
+                word_to_line.insert(idx, current_line);
+                break;
+            }
+            current_line_offset += line_len + 1; // +1 for \n
+            current_line += 1;
+        }
+    }
+
+    let mut all_matches: Vec<HighlightMatch> = Vec::new();
+    let mut group_counter: usize = 1;
+
+    // Track the highest priority match for each word: priority 4 (moss-green) > 3 (light-green) > 2 (yellow) > 1 (purple)
+    // We map start index to (priority, HighlightMatch)
+    let mut best_matches: std::collections::HashMap<usize, (u8, HighlightMatch)> = std::collections::HashMap::new();
+
     if word_matches.len() > 1 {
         // Compare every pair to find rhymes
         for i in 0..word_matches.len() {
             for j in (i+1)..word_matches.len() {
+
+                // Enforce max 4 lines distance
+                let line_i = *word_to_line.get(&i).unwrap_or(&0) as i32;
+                let line_j = *word_to_line.get(&j).unwrap_or(&0) as i32;
+                if (line_j - line_i).abs() > 4 {
+                    continue; // Skip if too far apart
+                }
+
                 let w1 = word_matches[i].as_str();
                 let w2 = word_matches[j].as_str();
 
@@ -145,53 +178,67 @@ pub fn analyze_rhymes(text: &str, lang: &str) -> RhymeAnalysisResult {
                     if let (Some(r1), Some(r2)) = (dictionary::extract_rhyme_part(&ph1), dictionary::extract_rhyme_part(&ph2)) {
                         let is_pure = dictionary::is_pure_rhyme(&r1, &r2);
                         let is_asso = dictionary::is_assonance(&r1, &r2);
+
+                        let vowels1 = dictionary::get_all_vowels(&ph1);
+                        let vowels2 = dictionary::get_all_vowels(&ph2);
+
                         let mut is_vocal = false;
-                        if let (Some(v1), Some(v2)) = (dictionary::get_vowel(&ph1), dictionary::get_vowel(&ph2)) {
-                            if v1 == v2 { is_vocal = true; }
+                        if vowels1.len() >= 2 && vowels1 == vowels2 {
+                            is_vocal = true;
                         }
 
-                        // Priority: End rhymes must be green if pure. Stop words are only allowed if pure rhyme at line end.
-                        let is_end_rhyme = line_end_indices.contains(&i) || line_end_indices.contains(&j);
+                        let is_end_rhyme_i = line_end_indices.contains(&i);
+                        let is_end_rhyme_j = line_end_indices.contains(&j);
+                        let is_end_rhyme = is_end_rhyme_i && is_end_rhyme_j;
+
+                        let mut match_type_found = None;
+                        let mut priority = 0;
+
+                        // Priority: End rhymes must be moss-green if pure. Stop words are only allowed if pure rhyme at line end.
                         if is_pure && (!is_stop_word || is_end_rhyme) {
-                            // Pure rhymes get green.
-                            matches.push(HighlightMatch {
-                                word: w1.to_string(),
-                                start: start1,
-                                end: end1,
-                                match_type: "green".to_string(),
-                            });
-                            matches.push(HighlightMatch {
-                                word: w2.to_string(),
-                                start: start2,
-                                end: end2,
-                                match_type: "green".to_string(),
-                            });
+                            if is_end_rhyme_i || is_end_rhyme_j {
+                                match_type_found = Some("moss-green".to_string());
+                                priority = 4;
+                            } else {
+                                match_type_found = Some("light-green".to_string());
+                                priority = 3;
+                            }
                         } else if is_asso && !is_stop_word {
-                             matches.push(HighlightMatch {
-                                word: w1.to_string(),
-                                start: start1,
-                                end: end1,
-                                match_type: "yellow".to_string(),
-                            });
-                            matches.push(HighlightMatch {
-                                word: w2.to_string(),
-                                start: start2,
-                                end: end2,
-                                match_type: "yellow".to_string(),
-                            });
+                             match_type_found = Some("yellow".to_string());
+                             priority = 2;
                         } else if is_vocal && !is_stop_word {
-                            matches.push(HighlightMatch {
+                             match_type_found = Some("purple".to_string());
+                             priority = 1;
+                        }
+
+                        if let Some(mt) = match_type_found {
+                            let gid = group_counter;
+                            group_counter += 1;
+
+                            let match1 = HighlightMatch {
                                 word: w1.to_string(),
                                 start: start1,
                                 end: end1,
-                                match_type: "purple".to_string(),
-                            });
-                            matches.push(HighlightMatch {
+                                match_type: mt.clone(),
+                                group_id: gid,
+                            };
+                            let match2 = HighlightMatch {
                                 word: w2.to_string(),
                                 start: start2,
                                 end: end2,
-                                match_type: "purple".to_string(),
-                            });
+                                match_type: mt.clone(),
+                                group_id: gid,
+                            };
+
+                            let current_best_1 = best_matches.get(&start1).map(|(p, _)| *p).unwrap_or(0);
+                            if priority > current_best_1 {
+                                best_matches.insert(start1, (priority, match1));
+                            }
+
+                            let current_best_2 = best_matches.get(&start2).map(|(p, _)| *p).unwrap_or(0);
+                            if priority > current_best_2 {
+                                best_matches.insert(start2, (priority, match2));
+                            }
                         }
                     }
                 }
@@ -199,8 +246,15 @@ pub fn analyze_rhymes(text: &str, lang: &str) -> RhymeAnalysisResult {
         }
     }
 
+    for (_, (_, m)) in best_matches {
+        all_matches.push(m);
+    }
+
+    // Ensure matches are sorted by start index
+    all_matches.sort_by_key(|m| m.start);
+
     RhymeAnalysisResult {
-        matches
+        matches: all_matches
     }
 }
 

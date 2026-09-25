@@ -8,6 +8,11 @@ export interface HighlightMatch {
   start: number;
   end: number;
   match_type: string;
+  group_id: number;
+}
+
+export interface RhymeAnalysisResult {
+  matches: HighlightMatch[];
 }
 
 export const RhymeHighlight = Extension.create({
@@ -16,6 +21,8 @@ export const RhymeHighlight = Extension.create({
   addProseMirrorPlugins() {
     let timeout: any = null;
     let currentLang = 'auto'; // We'll need a way to pass this
+    let hoveredGroupId: number | null = null;
+    let currentMatches: HighlightMatch[] = [];
 
     return [
       new Plugin({
@@ -25,39 +32,70 @@ export const RhymeHighlight = Extension.create({
             return DecorationSet.empty;
           },
           apply(tr, oldState) {
-            const matches: HighlightMatch[] = tr.getMeta('rhymeMatches') || [];
-            if (tr.getMeta('rhymeMatches') !== undefined) {
-              const decorations: Decoration[] = [];
-              matches.forEach(match => {
-                let className = '';
-                if (match.match_type === 'green') {
-                  className = 'rhyme-green';
-                } else if (match.match_type === 'yellow') {
-                  className = 'rhyme-yellow';
-                } else if (match.match_type === 'purple') {
-                  className = 'rhyme-purple';
-                }
+            const newMatches: HighlightMatch[] = tr.getMeta('rhymeMatches');
+            const newHoverId: number | null = tr.getMeta('hoveredGroupId');
+            const toggleMeta = tr.getMeta('highlightsEnabled');
 
-                // Assuming start and end are based on text characters
-                // ProseMirror offsets need to account for node boundaries, but for a simple block, we map directly.
-                // In a robust implementation, we would map absolute text positions to ProseMirror positions.
-                // For this demo, we'll map simplified pos.
-
-                // Only create if positions are valid
-                if (match.start >= 0 && match.end <= tr.doc.content.size) {
-                  try {
-                    decorations.push(
-                      Decoration.inline(match.start, match.end, {
-                        class: className,
-                      })
-                    );
-                  } catch (e) {
-                    console.error("Invalid decoration position", match);
-                  }
-                }
-              });
-              return DecorationSet.create(tr.doc, decorations);
+            let matchesToProcess = currentMatches;
+            if (newMatches !== undefined) {
+              matchesToProcess = newMatches;
+              currentMatches = newMatches;
             }
+            if (newHoverId !== undefined) {
+              hoveredGroupId = newHoverId;
+            }
+
+            // Check global toggle (we can pass it via meta)
+            // If disabled, just return empty
+            if (toggleMeta === false) {
+              return DecorationSet.empty;
+            }
+
+            // Always recalculate decorations if meta changes
+            if (newMatches !== undefined || newHoverId !== undefined || toggleMeta !== undefined || tr.docChanged || tr.selectionSet) {
+               // Determine cursor position to auto-hover
+               const { from, to } = tr.selection;
+               const isCursorHover = from === to;
+               let activeGroupIds = new Set<number>();
+
+               if (hoveredGroupId !== null) {
+                 activeGroupIds.add(hoveredGroupId);
+               }
+
+               if (isCursorHover) {
+                 matchesToProcess.forEach(m => {
+                   if (from >= m.start && from <= m.end) {
+                     activeGroupIds.add(m.group_id);
+                   }
+                 });
+               }
+
+               const decorations: Decoration[] = [];
+               matchesToProcess.forEach(match => {
+                 const isActive = activeGroupIds.has(match.group_id);
+
+                 // If not active, only show permanent ones
+                 if (!isActive && match.match_type !== 'moss-green' && match.match_type !== 'light-green') {
+                    return; // Skip rendering
+                 }
+
+                 let className = `rhyme-${match.match_type}`;
+
+                 if (match.start >= 0 && match.end <= tr.doc.content.size) {
+                   try {
+                     decorations.push(
+                       Decoration.inline(match.start, match.end, {
+                         class: `${className} group-id-${match.group_id}`,
+                       })
+                     );
+                   } catch (e) {
+                     console.error("Invalid decoration position", match);
+                   }
+                 }
+               });
+               return DecorationSet.create(tr.doc, decorations);
+            }
+
             return oldState.map(tr.mapping, tr.doc);
           },
         },
@@ -65,11 +103,31 @@ export const RhymeHighlight = Extension.create({
           decorations(state) {
             return this.getState(state);
           },
+          handleDOMEvents: {
+            mouseover: (view, event) => {
+              const target = event.target as HTMLElement;
+              if (target.classList) {
+                 const match = Array.from(target.classList).find(c => c.startsWith('group-id-'));
+                 if (match) {
+                    const groupId = parseInt(match.replace('group-id-', ''), 10);
+                    if (hoveredGroupId !== groupId) {
+                       view.dispatch(view.state.tr.setMeta('hoveredGroupId', groupId));
+                    }
+                    return false;
+                 }
+              }
+              if (hoveredGroupId !== null) {
+                 view.dispatch(view.state.tr.setMeta('hoveredGroupId', null));
+              }
+              return false;
+            }
+          }
         },
         view(_editorView) {
           return {
             update(view, prevState) {
               const docChanged = !view.state.doc.eq(prevState.doc);
+
               if (docChanged) {
                 if (timeout) clearTimeout(timeout);
                 timeout = setTimeout(async () => {
@@ -95,9 +153,7 @@ export const RhymeHighlight = Extension.create({
                     });
 
                     // Call Tauri API
-                    // Note: Rust regex byte indices need to be mapped to char indices,
-                    // but we will do it here if possible, or assume Rust sends char indices.
-                    const result = await invoke<{matches: HighlightMatch[]}>('analyze_rhymes', {
+                    const result = await invoke<RhymeAnalysisResult>('analyze_rhymes', {
                       text: text,
                       lang: currentLang
                     });
@@ -113,7 +169,7 @@ export const RhymeHighlight = Extension.create({
 
                     const mappedMatches = result.matches.map(m => ({
                       ...m,
-                      start: mapToPm(m.start) + 1, // +1 because ProseMirror offsets text by 1 from block start
+                      start: mapToPm(m.start) + 1,
                       end: mapToPm(m.end) + 1
                     }));
 
