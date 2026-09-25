@@ -20,8 +20,11 @@ interface AppState {
   setActiveBlockId: (id: string | null) => void;
 
   // Toggle state
-  highlightsEnabled: boolean;
-  setHighlightsEnabled: (enabled: boolean) => void;
+  showHighlights: boolean;
+  toggleHighlights: () => void;
+
+  hoveredGroupId: number | null;
+  setHoveredGroupId: (id: number | null) => void;
 }
 
 const defaultProject: ProjectData = {
@@ -131,6 +134,8 @@ export const useAppStore = create<AppState>((set) => ({
   setActiveWord: (word) => set({ activeWord: word }),
   activeBlockId: null,
   setActiveBlockId: (id) => set({ activeBlockId: id }),
-  highlightsEnabled: true,
-  setHighlightsEnabled: (enabled) => set({ highlightsEnabled: enabled }),
+  showHighlights: true,
+  toggleHighlights: () => set((state) => ({ showHighlights: !state.showHighlights })),
+  hoveredGroupId: null,
+  setHoveredGroupId: (id) => set({ hoveredGroupId: id }),
 }));
