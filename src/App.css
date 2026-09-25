@@ -39,24 +39,24 @@ body {
 }
 
 /* Highlighting Syntax */
-.rhyme-moss-green {
+.hl-moss-green {
   text-decoration: underline solid #2ECC71 2px;
 }
 
-.rhyme-light-green {
+.hl-light-green {
   text-decoration: underline solid #82E0AA 2px;
 }
 
-.rhyme-yellow {
+.hl-yellow {
   text-decoration: underline dotted #F1C40F 2px;
 }
 
-.rhyme-purple {
+.hl-purple {
   background-color: rgba(155, 89, 182, 0.25);
   border-radius: 2px;
 }
 
 /* Base styles for active words */
-[class*="group-id-"] {
+[data-group-id] {
   transition: all 0.2s ease-in-out;
 }

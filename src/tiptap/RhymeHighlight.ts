@@ -34,7 +34,7 @@ export const RhymeHighlight = Extension.create({
           apply(tr, oldState) {
             const newMatches: HighlightMatch[] = tr.getMeta('rhymeMatches');
             const newHoverId: number | null = tr.getMeta('hoveredGroupId');
-            const toggleMeta = tr.getMeta('highlightsEnabled');
+            const toggleMeta = tr.getMeta('showHighlights');
 
             let matchesToProcess = currentMatches;
             if (newMatches !== undefined) {
@@ -79,13 +79,14 @@ export const RhymeHighlight = Extension.create({
                     return; // Skip rendering
                  }
 
-                 let className = `rhyme-${match.match_type}`;
+                 let className = `hl-${match.match_type}`;
 
                  if (match.start >= 0 && match.end <= tr.doc.content.size) {
                    try {
                      decorations.push(
                        Decoration.inline(match.start, match.end, {
-                         class: `${className} group-id-${match.group_id}`,
+                         class: className,
+                         'data-group-id': match.group_id.toString()
                        })
                      );
                    } catch (e) {
@@ -106,20 +107,24 @@ export const RhymeHighlight = Extension.create({
           handleDOMEvents: {
             mouseover: (view, event) => {
               const target = event.target as HTMLElement;
-              if (target.classList) {
-                 const match = Array.from(target.classList).find(c => c.startsWith('group-id-'));
-                 if (match) {
-                    const groupId = parseInt(match.replace('group-id-', ''), 10);
-                    if (hoveredGroupId !== groupId) {
-                       view.dispatch(view.state.tr.setMeta('hoveredGroupId', groupId));
-                    }
-                    return false;
-                 }
+              const groupIdStr = target.getAttribute('data-group-id');
+              if (groupIdStr) {
+                  const groupId = parseInt(groupIdStr, 10);
+                  if (hoveredGroupId !== groupId) {
+                      view.dispatch(view.state.tr.setMeta('hoveredGroupId', groupId));
+                  }
+                  return false;
               }
               if (hoveredGroupId !== null) {
                  view.dispatch(view.state.tr.setMeta('hoveredGroupId', null));
               }
               return false;
+            },
+            mouseleave: (view, _event) => {
+               if (hoveredGroupId !== null) {
+                  view.dispatch(view.state.tr.setMeta('hoveredGroupId', null));
+               }
+               return false;
             }
           }
         },

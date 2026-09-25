@@ -2,9 +2,10 @@ import { BlockList } from "./components/BlockList";
 import { Sidebar } from "./components/Sidebar";
 import { useAppStore } from "./store";
 import { openProject, saveProject, exportToMarkdown, exportToText } from "./utils/fileManager";
+import { Eye, EyeOff } from "lucide-react";
 
 function App() {
-  const { project, setProject, highlightsEnabled, setHighlightsEnabled } = useAppStore();
+  const { project, setProject, showHighlights, toggleHighlights } = useAppStore();
 
   const handleOpen = async () => {
     const loaded = await openProject();
@@ -52,11 +53,11 @@ function App() {
             </button>
             <div className="h-9 w-px bg-[#333] mx-1"></div>
             <button
-              onClick={() => setHighlightsEnabled(!highlightsEnabled)}
-              className={`flex items-center gap-2 border text-sm px-4 py-2 rounded-md font-medium transition-all shadow-sm ${highlightsEnabled ? 'bg-[#2a2a2a] border-[#444] text-green-400' : 'bg-[#1a1a1a] border-[#333] text-gray-500'}`}
+              onClick={toggleHighlights}
+              className={`flex items-center gap-2 border text-sm px-4 py-2 rounded-md font-medium transition-all shadow-sm ${showHighlights ? 'bg-[#2a2a2a] border-emerald-800 text-emerald-500' : 'bg-[#1a1a1a] border-[#333] text-zinc-500'}`}
               title="Highlights (Farben) ein-/ausschalten"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12h4l3-9 5 18 3-9h5"/></svg>
+              {showHighlights ? <Eye size={16} /> : <EyeOff size={16} />}
               Highlights
             </button>
             <div className="h-9 w-px bg-[#333] mx-1"></div>
