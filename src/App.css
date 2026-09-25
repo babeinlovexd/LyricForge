@@ -39,14 +39,24 @@ body {
 }
 
 /* Highlighting Syntax */
-.rhyme-purple {
-  background-color: rgba(155, 89, 182, 0.2); /* Lila Hintergrund, 20% Deckkraft */
+.rhyme-moss-green {
+  text-decoration: underline solid #2ECC71 2px;
 }
 
-.rhyme-green {
-  text-decoration: underline solid #2ECC71 2px;
+.rhyme-light-green {
+  text-decoration: underline solid #82E0AA 2px;
 }
 
 .rhyme-yellow {
   text-decoration: underline dotted #F1C40F 2px;
+}
+
+.rhyme-purple {
+  background-color: rgba(155, 89, 182, 0.25);
+  border-radius: 2px;
+}
+
+/* Base styles for active words */
+[class*="group-id-"] {
+  transition: all 0.2s ease-in-out;
 }

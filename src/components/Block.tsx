@@ -16,7 +16,7 @@ interface BlockProps {
 }
 
 export const Block: React.FC<BlockProps> = ({ block }) => {
-  const { updateBlock, duplicateBlock, removeBlock, project, setSidebarOpen, setActiveWord, setActiveBlockId } = useAppStore();
+  const { updateBlock, duplicateBlock, removeBlock, project, setSidebarOpen, setActiveWord, setActiveBlockId, highlightsEnabled } = useAppStore();
   const [syllables, setSyllables] = useState<number[]>([]);
 
   const {
@@ -86,6 +86,13 @@ export const Block: React.FC<BlockProps> = ({ block }) => {
     calculateSyllables(block.content);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Sync highlights toggle state to ProseMirror
+  useEffect(() => {
+    if (editor) {
+      editor.view.dispatch(editor.view.state.tr.setMeta('highlightsEnabled', highlightsEnabled));
+    }
+  }, [highlightsEnabled, editor]);
 
   return (
     <div ref={setNodeRef} style={style} className="bg-[#1e1e1e] border border-[#333] rounded-lg mb-4 flex relative group/block">

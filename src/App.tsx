@@ -4,7 +4,7 @@ import { useAppStore } from "./store";
 import { openProject, saveProject, exportToMarkdown, exportToText } from "./utils/fileManager";
 
 function App() {
-  const { project, setProject } = useAppStore();
+  const { project, setProject, highlightsEnabled, setHighlightsEnabled } = useAppStore();
 
   const handleOpen = async () => {
     const loaded = await openProject();
@@ -49,6 +49,15 @@ function App() {
             <button onClick={handleSave} className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-sm px-4 py-2 rounded-md font-medium transition-all shadow-sm">
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
               Speichern
+            </button>
+            <div className="h-9 w-px bg-[#333] mx-1"></div>
+            <button
+              onClick={() => setHighlightsEnabled(!highlightsEnabled)}
+              className={`flex items-center gap-2 border text-sm px-4 py-2 rounded-md font-medium transition-all shadow-sm ${highlightsEnabled ? 'bg-[#2a2a2a] border-[#444] text-green-400' : 'bg-[#1a1a1a] border-[#333] text-gray-500'}`}
+              title="Highlights (Farben) ein-/ausschalten"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12h4l3-9 5 18 3-9h5"/></svg>
+              Highlights
             </button>
             <div className="h-9 w-px bg-[#333] mx-1"></div>
             <button onClick={handleExportMd} className="bg-[#1a1a1a] hover:bg-[#2a2a2a] border border-[#3a3a3a] text-sm px-3 py-2 rounded-md font-medium transition-all shadow-sm">.md</button>
