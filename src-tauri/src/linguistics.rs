@@ -34,6 +34,20 @@ lazy_static::lazy_static! {
 }
 
 pub fn count_syllables_word(word: &str, lang: &str) -> usize {
+    // 1. Try to get exact syllable count from phonemes (vowel count)
+    if let Some(phonemes) = dictionary::get_phonemes(word, lang) {
+        let mut count = 0;
+        for p in phonemes {
+            if p.ends_with('0') || p.ends_with('1') || p.ends_with('2') {
+                count += 1;
+            }
+        }
+        if count > 0 {
+            return count;
+        }
+    }
+
+    // 2. Fallback to hyphenation
     let dict = match lang {
         "en" => &*EN_DICT,
         "de" => &*DE_DICT,
@@ -43,7 +57,15 @@ pub fn count_syllables_word(word: &str, lang: &str) -> usize {
     let hyphenated = dict.hyphenate(word);
     let iter = hyphenated.into_iter();
     let syllables = iter.segments().count();
-    if syllables == 0 && !word.is_empty() { 1 } else { syllables }
+
+    // 3. Last resort fallback heuristic
+    if syllables == 0 && !word.is_empty() {
+        let re = Regex::new(r"(?i)[aeiouyäöü]+").unwrap();
+        let matches = re.find_iter(word).count();
+        if matches == 0 { 1 } else { matches }
+    } else {
+        syllables
+    }
 }
 
 #[tauri::command]
@@ -65,7 +87,7 @@ pub fn calculate_syllables(text: &str, lang: &str) -> Vec<usize> {
 }
 
 #[tauri::command]
-pub fn analyze_rhymes(text: &str, _lang: &str) -> RhymeAnalysisResult {
+pub fn analyze_rhymes(text: &str, lang: &str) -> RhymeAnalysisResult {
     dictionary::init_dictionary();
 
     let mut matches = Vec::new();
@@ -116,7 +138,7 @@ pub fn analyze_rhymes(text: &str, _lang: &str) -> RhymeAnalysisResult {
                 let start2 = *byte_to_char.get(&word_matches[j].start()).unwrap_or(&0);
                 let end2 = *byte_to_char.get(&word_matches[j].end()).unwrap_or(&0);
 
-                if let (Some(ph1), Some(ph2)) = (dictionary::get_phonemes(w1), dictionary::get_phonemes(w2)) {
+                if let (Some(ph1), Some(ph2)) = (dictionary::get_phonemes(w1, lang), dictionary::get_phonemes(w2, lang)) {
                     if let (Some(r1), Some(r2)) = (dictionary::extract_rhyme_part(&ph1), dictionary::extract_rhyme_part(&ph2)) {
                         let is_pure = dictionary::is_pure_rhyme(&r1, &r2);
                         let is_asso = dictionary::is_assonance(&r1, &r2);
@@ -183,7 +205,7 @@ pub fn analyze_rhymes(text: &str, _lang: &str) -> RhymeAnalysisResult {
 pub fn find_rhymes_for_word(word: &str, mode: &str, lang: &str) -> Vec<RhymeResultGrouped> {
     dictionary::init_dictionary();
 
-    let rhymes = dictionary::get_all_rhymes(word, mode);
+    let rhymes = dictionary::get_all_rhymes(word, mode, lang);
 
     // Group by syllables
     let mut grouped = std::collections::HashMap::new();

@@ -48,6 +48,12 @@ pub fn init_dictionary() {
         ("gesicht", vec!["G", "EH0", "Z", "IH1", "CH", "T"]),
         ("zurück", vec!["Z", "UH0", "R", "IH1", "K"]),
         ("glück", vec!["G", "L", "IH1", "K"]),
+        ("raum", vec!["R", "AW1", "M"]),
+        ("baum", vec!["B", "AW1", "M"]),
+        ("saum", vec!["Z", "AW1", "M"]),
+        ("schaum", vec!["SH", "AW1", "M"]),
+        ("flaum", vec!["F", "L", "AW1", "M"]),
+        ("raumfahrt", vec!["R", "AW1", "M", "F", "AA2", "R", "T"]),
     ];
     for (w, p) in de_mock_entries {
         de_dict.insert(w.to_string(), p.iter().map(|&s| s.to_string()).collect());
@@ -74,30 +80,38 @@ pub fn init_dictionary() {
     }
 }
 
-pub fn get_phonemes(word: &str) -> Option<Vec<String>> {
-    // Try EN first, then DE for simplicity in this demo.
+pub fn get_phonemes(word: &str, lang: &str) -> Option<Vec<String>> {
+    let word_lower = word.to_lowercase();
     let en_dict = EN_DICT.lock().unwrap();
-    if let Some(p) = en_dict.get(&word.to_lowercase()) {
-        return Some(p.clone());
-    }
     let de_dict = DE_DICT.lock().unwrap();
-    if let Some(p) = de_dict.get(&word.to_lowercase()) {
-        return Some(p.clone());
+
+    if lang == "de" || lang == "DE" {
+        if let Some(p) = de_dict.get(&word_lower) { return Some(p.clone()); }
+        if let Some(p) = en_dict.get(&word_lower) { return Some(p.clone()); }
+    } else {
+        if let Some(p) = en_dict.get(&word_lower) { return Some(p.clone()); }
+        if let Some(p) = de_dict.get(&word_lower) { return Some(p.clone()); }
     }
     None
 }
 
 // Simple rhyme extraction:
-// We look for primary stress (vowel ending in '1') and return all phonemes from there
+// We look for the LAST primary stress (vowel ending in '1') to correctly match multi-syllable compound words
 pub fn extract_rhyme_part(phonemes: &[String]) -> Option<Vec<String>> {
+    let mut last_stress_idx = None;
     for (i, p) in phonemes.iter().enumerate() {
-        if p.ends_with('1') {
-            return Some(phonemes[i..].to_vec());
+        if p.ends_with('1') || p.ends_with('2') {
+            last_stress_idx = Some(i);
         }
     }
-    // Fallback: use first vowel with '2' or '0'
+
+    if let Some(idx) = last_stress_idx {
+        return Some(phonemes[idx..].to_vec());
+    }
+
+    // Fallback: use first vowel with '0'
     for (i, p) in phonemes.iter().enumerate() {
-        if p.ends_with('2') || p.ends_with('0') {
+        if p.ends_with('0') {
             return Some(phonemes[i..].to_vec());
         }
     }
@@ -139,8 +153,8 @@ pub fn get_vowel(phonemes: &[String]) -> Option<String> {
 
 // Group rhyme results
 // Tuple structure: (word, lang_tag)
-pub fn get_all_rhymes(word: &str, mode: &str) -> Vec<(String, String)> {
-    let target_phonemes = get_phonemes(word);
+pub fn get_all_rhymes(word: &str, mode: &str, lang: &str) -> Vec<(String, String)> {
+    let target_phonemes = get_phonemes(word, lang);
     if target_phonemes.is_none() {
         return vec![];
     }
