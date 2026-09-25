@@ -168,6 +168,11 @@ pub fn analyze_rhymes(text: &str, lang: &str) -> RhymeAnalysisResult {
                 let w1 = word_matches[i].as_str();
                 let w2 = word_matches[j].as_str();
 
+                // Identische Wörter ausschließen (Wortwiederholungen sind keine Reime)
+                if w1.eq_ignore_ascii_case(w2) {
+                    continue;
+                }
+
                 let is_stop_word = stop_words.contains(&w1.to_lowercase().as_str()) || stop_words.contains(&w2.to_lowercase().as_str());
                 let start1 = *byte_to_char.get(&word_matches[i].start()).unwrap_or(&0);
                 let end1 = *byte_to_char.get(&word_matches[i].end()).unwrap_or(&0);
