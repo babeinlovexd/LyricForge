@@ -17,9 +17,15 @@ pub struct HighlightMatch {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+pub struct RhymeWord {
+    pub word: String,
+    pub lang: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
 pub struct RhymeResultGrouped {
     pub syllables: usize,
-    pub words: Vec<String>,
+    pub words: Vec<RhymeWord>,
 }
 
 lazy_static::lazy_static! {
@@ -80,12 +86,31 @@ pub fn analyze_rhymes(text: &str, _lang: &str) -> RhymeAnalysisResult {
     // and for end of string
     byte_to_char.insert(text.len(), current_char_idx);
 
+    // Extract line ends for priority highlighting
+    let lines: Vec<&str> = text.split('\n').collect();
+    let mut line_end_indices = std::collections::HashSet::new();
+    for line in lines {
+        if let Some(mat) = re.find_iter(line).last() {
+            // Find this match in the global word_matches list
+            for (idx, w_match) in word_matches.iter().enumerate() {
+                if w_match.as_str() == mat.as_str() {
+                    line_end_indices.insert(idx);
+                }
+            }
+        }
+    }
+
+    // Stop words to ignore for standalone matches
+    let stop_words = vec!["der", "die", "das", "ein", "eine", "in", "im", "den", "dem", "mich", "und", "oder", "ist", "sind", "ich", "du", "er", "sie", "es", "wir", "ihr"];
+
     if word_matches.len() > 1 {
         // Compare every pair to find rhymes
         for i in 0..word_matches.len() {
             for j in (i+1)..word_matches.len() {
                 let w1 = word_matches[i].as_str();
                 let w2 = word_matches[j].as_str();
+
+                let is_stop_word = stop_words.contains(&w1.to_lowercase().as_str()) || stop_words.contains(&w2.to_lowercase().as_str());
                 let start1 = *byte_to_char.get(&word_matches[i].start()).unwrap_or(&0);
                 let end1 = *byte_to_char.get(&word_matches[i].end()).unwrap_or(&0);
                 let start2 = *byte_to_char.get(&word_matches[j].start()).unwrap_or(&0);
@@ -93,7 +118,17 @@ pub fn analyze_rhymes(text: &str, _lang: &str) -> RhymeAnalysisResult {
 
                 if let (Some(ph1), Some(ph2)) = (dictionary::get_phonemes(w1), dictionary::get_phonemes(w2)) {
                     if let (Some(r1), Some(r2)) = (dictionary::extract_rhyme_part(&ph1), dictionary::extract_rhyme_part(&ph2)) {
-                        if dictionary::is_pure_rhyme(&r1, &r2) {
+                        let is_pure = dictionary::is_pure_rhyme(&r1, &r2);
+                        let is_asso = dictionary::is_assonance(&r1, &r2);
+                        let mut is_vocal = false;
+                        if let (Some(v1), Some(v2)) = (dictionary::get_vowel(&ph1), dictionary::get_vowel(&ph2)) {
+                            if v1 == v2 { is_vocal = true; }
+                        }
+
+                        // Priority: End rhymes must be green if pure. Stop words are only allowed if pure rhyme at line end.
+                        let is_end_rhyme = line_end_indices.contains(&i) || line_end_indices.contains(&j);
+                        if is_pure && (!is_stop_word || is_end_rhyme) {
+                            // Pure rhymes get green.
                             matches.push(HighlightMatch {
                                 word: w1.to_string(),
                                 start: start1,
@@ -106,7 +141,7 @@ pub fn analyze_rhymes(text: &str, _lang: &str) -> RhymeAnalysisResult {
                                 end: end2,
                                 match_type: "green".to_string(),
                             });
-                        } else if dictionary::is_assonance(&r1, &r2) {
+                        } else if is_asso && !is_stop_word {
                              matches.push(HighlightMatch {
                                 word: w1.to_string(),
                                 start: start1,
@@ -119,24 +154,19 @@ pub fn analyze_rhymes(text: &str, _lang: &str) -> RhymeAnalysisResult {
                                 end: end2,
                                 match_type: "yellow".to_string(),
                             });
-                        } else {
-                            // vocal harmony
-                            if let (Some(v1), Some(v2)) = (dictionary::get_vowel(&ph1), dictionary::get_vowel(&ph2)) {
-                                if v1 == v2 {
-                                    matches.push(HighlightMatch {
-                                        word: w1.to_string(),
-                                        start: start1,
-                                        end: end1,
-                                        match_type: "purple".to_string(),
-                                    });
-                                    matches.push(HighlightMatch {
-                                        word: w2.to_string(),
-                                        start: start2,
-                                        end: end2,
-                                        match_type: "purple".to_string(),
-                                    });
-                                }
-                            }
+                        } else if is_vocal && !is_stop_word {
+                            matches.push(HighlightMatch {
+                                word: w1.to_string(),
+                                start: start1,
+                                end: end1,
+                                match_type: "purple".to_string(),
+                            });
+                            matches.push(HighlightMatch {
+                                word: w2.to_string(),
+                                start: start2,
+                                end: end2,
+                                match_type: "purple".to_string(),
+                            });
                         }
                     }
                 }
@@ -157,15 +187,18 @@ pub fn find_rhymes_for_word(word: &str, mode: &str, lang: &str) -> Vec<RhymeResu
 
     // Group by syllables
     let mut grouped = std::collections::HashMap::new();
-    for rhyme in rhymes {
-        let syllables = count_syllables_word(&rhyme, lang);
-        grouped.entry(syllables).or_insert(Vec::new()).push(rhyme);
+    for (rhyme_word, rhyme_lang) in rhymes {
+        let syllables = count_syllables_word(&rhyme_word, lang);
+        grouped.entry(syllables).or_insert(Vec::new()).push(RhymeWord {
+            word: rhyme_word,
+            lang: rhyme_lang,
+        });
     }
 
     let mut result = Vec::new();
     for (syllables, words) in grouped {
         // limit to 50 results per syllable group to prevent UI freeze
-        let mut limited_words = words.clone();
+        let mut limited_words = words;
         if limited_words.len() > 50 {
             limited_words.truncate(50);
         }
