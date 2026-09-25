@@ -74,12 +74,11 @@ export const RhymeHighlight = Extension.create({
                matchesToProcess.forEach(match => {
                  const isActive = activeGroupIds.has(match.group_id);
 
-                 // If not active, only show permanent ones
-                 if (!isActive && match.match_type !== 'moss-green' && match.match_type !== 'light-green') {
-                    return; // Skip rendering
-                 }
-
                  let className = `hl-${match.match_type}`;
+                 if (isActive) {
+                    if (match.match_type === 'yellow') className += ' hover-active-yellow';
+                    if (match.match_type === 'purple') className += ' hover-active-purple';
+                 }
 
                  if (match.start >= 0 && match.end <= tr.doc.content.size) {
                    try {

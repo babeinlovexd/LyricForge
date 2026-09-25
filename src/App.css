@@ -39,21 +39,29 @@ body {
 }
 
 /* Highlighting Syntax */
+/* Dauerhafte reine Reime */
 .hl-moss-green {
-  text-decoration: underline solid #2ECC71 2px;
+  text-decoration: underline 2px solid #2e7d32;
+  text-underline-offset: 3px;
 }
-
 .hl-light-green {
-  text-decoration: underline solid #82E0AA 2px;
+  text-decoration: underline 2px solid #4caf50;
+  text-underline-offset: 3px;
 }
 
-.hl-yellow {
-  text-decoration: underline dotted #F1C40F 2px;
+/* Assonanzen & Vokalklänge standardmäßig unsichtbar */
+.hl-yellow, .hl-purple {
+  text-decoration: none;
 }
 
-.hl-purple {
-  background-color: rgba(155, 89, 182, 0.25);
-  border-radius: 2px;
+/* Nur aktiv bei Hover über die zugehörige Gruppe */
+.hover-active-yellow {
+  text-decoration: underline 2px dotted #facc15 !important;
+  text-underline-offset: 3px;
+}
+.hover-active-purple {
+  text-decoration: underline 2px dashed #a855f7 !important;
+  text-underline-offset: 3px;
 }
 
 /* Base styles for active words */

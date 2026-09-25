@@ -1,0 +1,47 @@
+haus  HH AW1 S
+maus  M AW1 S
+raus  R AW1 S
+kalt  K AA1 L T
+gestalt  G EH0 SH T AA1 L T
+nacht  N AA1 CH T
+wacht  V AA1 CH T
+macht  M AA1 CH T
+regen  R EY1 G EH0 N
+segen  Z EY1 G EH0 N
+traum  T R AW1 M
+laut  L AW1 T
+stern  SH T EH1 R N
+berg  B EH1 R G
+funke  F UH1 N K EH0
+dunkel  D UH1 N K EH0 L
+leid  L AY1 T
+streit  SH T R AY1 T
+asphalt  AA0 S F AA1 L T
+bitterkalt  B IH0 T ER0 K AA1 L T
+spur  SH P UH1 R
+urnatur  UH1 R N AA0 T UH1 R
+pur  P UH1 R
+flur  F L UH1 R
+schnur  SH N UH1 R
+schwur  SH V UH1 R
+tannengrün  T AA1 N EH0 N G R IY1 N
+blühn  B L IY1 N
+licht  L IH1 CH T
+gesicht  G EH0 Z IH1 CH T
+schicht  SH IH1 CH T
+dichtet  D IH1 CH T EH0 T
+verdichtet  F EH0 R D IH1 CH T EH0 T
+berichtet  B EH0 R IH1 CH T EH0 T
+zurück  Z UH0 R IH1 K
+glück  G L IH1 K
+raum  R AW1 M
+baum  B AW1 M
+saum  Z AW1 M
+schaum  SH AW1 M
+flaum  F L AW1 M
+lied  L IY1 T
+ein  AY1 N
+sein  Z AY1 N
+klang  K L AA1 NG
+gesang  G EH0 Z AA1 NG
+raumfahrt  R AW1 M F AA2 R T
