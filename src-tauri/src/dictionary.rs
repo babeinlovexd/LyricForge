@@ -85,20 +85,29 @@ pub fn get_all_rhymes(word: &str, mode: &str, filter_lang: &str) -> Vec<(String,
     let word_lower = word.to_lowercase();
     let mut results = Vec::new();
 
+    // Helper to normalize vowels by stripping spaces and digits '0', '1', '2'
+    let normalize_vowels = |v: &str| -> String {
+        v.replace(' ', "").replace('0', "").replace('1', "").replace('2', "")
+    };
+
+    let target_vowels_normalized = normalize_vowels(&target.vowels);
+
     let query_base = match mode {
         "rein" => "SELECT word, lang FROM words WHERE rhyme_part = ?1 AND word != ?2",
-        "assonanz" => "SELECT word, lang FROM words WHERE vowels = ?1 AND rhyme_part != ?2 AND word != ?3",
-        "vokalklang" => "SELECT word, lang FROM words WHERE vowels = ?1 AND word != ?2",
+        "assonanz" => "SELECT word, lang FROM words WHERE REPLACE(REPLACE(REPLACE(REPLACE(vowels, ' ', ''), '0', ''), '1', ''), '2', '') = ?1 AND rhyme_part != ?2 AND word != ?3",
+        "vokalklang" => "SELECT word, lang FROM words WHERE REPLACE(REPLACE(REPLACE(REPLACE(vowels, ' ', ''), '0', ''), '1', ''), '2', '') = ?1 AND word != ?2",
         _ => return vec![],
     };
 
     let is_lang_filtered = filter_lang.eq_ignore_ascii_case("de") || filter_lang.eq_ignore_ascii_case("en");
 
-    let query = if is_lang_filtered {
+    let mut query = if is_lang_filtered {
         format!("{} AND lang = ?{}", query_base, if mode == "assonanz" { 4 } else { 3 })
     } else {
         query_base.to_string()
     };
+
+    query.push_str(" ORDER BY syllables ASC, word ASC LIMIT 250");
 
     let mut stmt = conn.prepare(&query).unwrap();
     let lower_lang = filter_lang.to_lowercase();
@@ -113,16 +122,16 @@ pub fn get_all_rhymes(word: &str, mode: &str, filter_lang: &str) -> Vec<(String,
         },
         "assonanz" => {
             if is_lang_filtered {
-                stmt.query((&target.vowels, &target.rhyme_part, &word_lower, &lower_lang)).unwrap()
+                stmt.query((&target_vowels_normalized, &target.rhyme_part, &word_lower, &lower_lang)).unwrap()
             } else {
-                stmt.query((&target.vowels, &target.rhyme_part, &word_lower)).unwrap()
+                stmt.query((&target_vowels_normalized, &target.rhyme_part, &word_lower)).unwrap()
             }
         },
         "vokalklang" => {
             if is_lang_filtered {
-                stmt.query((&target.vowels, &word_lower, &lower_lang)).unwrap()
+                stmt.query((&target_vowels_normalized, &word_lower, &lower_lang)).unwrap()
             } else {
-                stmt.query((&target.vowels, &word_lower)).unwrap()
+                stmt.query((&target_vowels_normalized, &word_lower)).unwrap()
             }
         },
         _ => unreachable!(),
