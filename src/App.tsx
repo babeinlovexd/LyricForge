@@ -29,8 +29,8 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#121212] text-white flex">
-      <div className="flex-1 flex flex-col h-screen overflow-y-auto p-8">
+    <div className="min-h-screen bg-[#121212] text-white flex flex-row overflow-hidden">
+      <div className="flex-1 flex flex-col h-screen overflow-y-auto p-8 min-h-0">
         <header className="max-w-4xl mx-auto mb-10 flex flex-col md:flex-row justify-between items-start md:items-end w-full gap-4 pb-4 border-b border-[#2a2a2a]">
           <div className="flex items-center gap-4">
             <img src="/LF.png" alt="LyricForge Logo" className="w-16 h-16 object-contain drop-shadow-md" />
