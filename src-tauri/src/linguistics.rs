@@ -35,16 +35,10 @@ lazy_static::lazy_static! {
 }
 
 pub fn count_syllables_word(word: &str, lang: &str) -> usize {
-    // 1. Try to get exact syllable count from phonemes (vowel count)
-    if let Some(phonemes) = dictionary::get_phonemes(word, lang) {
-        let mut count = 0;
-        for p in phonemes {
-            if p.ends_with('0') || p.ends_with('1') || p.ends_with('2') {
-                count += 1;
-            }
-        }
-        if count > 0 {
-            return count;
+    // 1. Try to get exact syllable count from SQLite
+    if let Some(attrs) = dictionary::get_word_attributes(word, lang) {
+        if attrs.syllables > 0 {
+            return attrs.syllables;
         }
     }
 
@@ -89,7 +83,7 @@ pub fn calculate_syllables(text: &str, lang: &str) -> Vec<usize> {
 
 #[tauri::command]
 pub fn analyze_rhymes(text: &str, lang: &str) -> RhymeAnalysisResult {
-    dictionary::init_dictionary();
+    dictionary::init_db_local(); // Fallback for tests if needed, but normally init_db is called in setup
 
     let re = Regex::new(r"[\p{L}]+").unwrap();
 
@@ -179,16 +173,24 @@ pub fn analyze_rhymes(text: &str, lang: &str) -> RhymeAnalysisResult {
                 let start2 = *byte_to_char.get(&word_matches[j].start()).unwrap_or(&0);
                 let end2 = *byte_to_char.get(&word_matches[j].end()).unwrap_or(&0);
 
-                if let (Some(ph1), Some(ph2)) = (dictionary::get_phonemes(w1, lang), dictionary::get_phonemes(w2, lang)) {
-                    if let (Some(r1), Some(r2)) = (dictionary::extract_rhyme_part(&ph1), dictionary::extract_rhyme_part(&ph2)) {
-                        let is_pure = dictionary::is_pure_rhyme(&r1, &r2);
-                        let is_asso = dictionary::is_assonance(&r1, &r2);
+                if let (Some(attr1), Some(attr2)) = (dictionary::get_word_attributes(w1, lang), dictionary::get_word_attributes(w2, lang)) {
+                    let r1 = attr1.rhyme_part;
+                    let r2 = attr2.rhyme_part;
 
-                        let vowels1 = dictionary::get_all_vowels(&ph1);
-                        let vowels2 = dictionary::get_all_vowels(&ph2);
+                    if !r1.is_empty() && !r2.is_empty() {
+                        let is_pure = r1 == r2;
+
+                        let v1 = attr1.vowels;
+                        let v2 = attr2.vowels;
+
+                        // Count space-separated vowels
+                        let v1_count = v1.split(' ').count();
+                        let v2_count = v2.split(' ').count();
+
+                        let is_asso = !is_pure && v1_count > 0 && v1.split(' ').next() == v2.split(' ').next();
 
                         let mut is_vocal = false;
-                        if vowels1.len() >= 2 && vowels1 == vowels2 {
+                        if v1_count >= 2 && v1 == v2 {
                             is_vocal = true;
                         }
 
@@ -265,7 +267,7 @@ pub fn analyze_rhymes(text: &str, lang: &str) -> RhymeAnalysisResult {
 
 #[tauri::command]
 pub fn find_rhymes_for_word(word: &str, mode: &str, lang: &str) -> Vec<RhymeResultGrouped> {
-    dictionary::init_dictionary();
+    dictionary::init_db_local();
 
     let rhymes = dictionary::get_all_rhymes(word, mode, lang);
 
