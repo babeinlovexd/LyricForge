@@ -8,7 +8,7 @@ pub struct WordAttributes {
     pub ipa: String,
     pub syllables: usize,
     pub rhyme_part: String,
-    pub vowels: String,
+    pub vowels_clean: String,
 }
 
 pub fn init_db(handle: &tauri::AppHandle) {
@@ -44,9 +44,9 @@ pub fn get_word_attributes(word: &str, lang: &str) -> Option<WordAttributes> {
     let conn = lock.lock().unwrap();
 
     let query = if lang.eq_ignore_ascii_case("de") || lang.eq_ignore_ascii_case("en") {
-        "SELECT ipa, syllables, rhyme_part, vowels FROM words WHERE word = ?1 AND lang = ?2 LIMIT 1"
+        "SELECT ipa, syllables, rhyme_part, vowels_clean FROM words WHERE word = ?1 AND lang = ?2 LIMIT 1"
     } else {
-        "SELECT ipa, syllables, rhyme_part, vowels FROM words WHERE word = ?1 LIMIT 1"
+        "SELECT ipa, syllables, rhyme_part, vowels_clean FROM words WHERE word = ?1 LIMIT 1"
     };
 
     let mut stmt = conn.prepare_cached(query).ok()?;
@@ -63,7 +63,7 @@ pub fn get_word_attributes(word: &str, lang: &str) -> Option<WordAttributes> {
             ipa: row.get(0).unwrap_or_default(),
             syllables: syll_int as usize,
             rhyme_part: row.get(2).unwrap_or_default(),
-            vowels: row.get(3).unwrap_or_default(),
+            vowels_clean: row.get(3).unwrap_or_default(),
         })
     } else {
         None
@@ -85,17 +85,12 @@ pub fn get_all_rhymes(word: &str, mode: &str, filter_lang: &str) -> Vec<(String,
     let word_lower = word.to_lowercase();
     let mut results = Vec::new();
 
-    // Helper to normalize vowels by stripping spaces and digits '0', '1', '2'
-    let normalize_vowels = |v: &str| -> String {
-        v.replace(' ', "").replace('0', "").replace('1', "").replace('2', "")
-    };
-
-    let target_vowels_normalized = normalize_vowels(&target.vowels);
+    let target_vowels_normalized = target.vowels_clean.clone();
 
     let query_base = match mode {
         "rein" => "SELECT word, lang FROM words WHERE rhyme_part = ?1 AND word != ?2",
-        "assonanz" => "SELECT word, lang FROM words WHERE REPLACE(REPLACE(REPLACE(REPLACE(vowels, ' ', ''), '0', ''), '1', ''), '2', '') = ?1 AND rhyme_part != ?2 AND word != ?3",
-        "vokalklang" => "SELECT word, lang FROM words WHERE REPLACE(REPLACE(REPLACE(REPLACE(vowels, ' ', ''), '0', ''), '1', ''), '2', '') = ?1 AND word != ?2",
+        "assonanz" => "SELECT word, lang FROM words WHERE vowels_clean = ?1 AND rhyme_part != ?2 AND word != ?3",
+        "vokalklang" => "SELECT word, lang FROM words WHERE vowels_clean = ?1 AND word != ?2",
         _ => return vec![],
     };
 

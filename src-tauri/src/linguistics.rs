@@ -180,14 +180,19 @@ pub fn analyze_rhymes(text: &str, lang: &str) -> RhymeAnalysisResult {
                     if !r1.is_empty() && !r2.is_empty() {
                         let is_pure = r1 == r2;
 
-                        let v1 = attr1.vowels;
-                        let v2 = attr2.vowels;
+                        let v1 = attr1.vowels_clean;
+                        let v2 = attr2.vowels_clean;
 
-                        // Count space-separated vowels
-                        let v1_count = v1.split(' ').count();
-                        let v2_count = v2.split(' ').count();
+                        // We count actual IPA vowels which may be multi-char.
+                        // With vowels_clean being squashed together in build_db.py,
+                        // we can regex split or length check. Since Python built vowels_clean as "aɪo"
+                        // we can do a rough count by checking length / 1.5 or split it on known boundaries.
+                        // A more robust way is querying syllables.
+                        let v1_count = attr1.syllables;
+                        let v2_count = attr2.syllables;
 
-                        let is_asso = !is_pure && v1_count > 0 && v1.split(' ').next() == v2.split(' ').next();
+                        // Assonance is true if the clean vowels string starts with the same primary vowel core.
+                        let is_asso = !is_pure && v1_count > 0 && !v1.is_empty() && v1.chars().next() == v2.chars().next();
 
                         let mut is_vocal = false;
                         if v1_count >= 2 && v1 == v2 {
