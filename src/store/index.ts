@@ -5,6 +5,7 @@ import { BlockData, ProjectData } from '../types';
 interface AppState {
   project: ProjectData;
   setProject: (project: ProjectData) => void;
+  setMetadata: (updates: Partial<ProjectData['metadata']>) => void;
   updateBlock: (id: string, updates: Partial<BlockData>) => void;
   addBlock: (index?: number) => void;
   duplicateBlock: (id: string) => void;
@@ -55,6 +56,13 @@ export const useAppStore = create<AppState>((set) => ({
   project: defaultProject,
 
   setProject: (project) => set({ project }),
+
+  setMetadata: (updates) => set((state) => ({
+    project: {
+      ...state.project,
+      metadata: { ...state.project.metadata, ...updates }
+    }
+  })),
 
   updateBlock: (id, updates) => set((state) => ({
     project: {

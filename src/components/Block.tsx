@@ -63,7 +63,15 @@ export const Block: React.FC<BlockProps> = ({ block }) => {
     content: block.content.split('\n').map(line => `<p>${line}</p>`).join(''),
     onUpdate: ({ editor }) => {
       // Get plain text for storing and syllables
-      const text = editor.getText();
+      // We must explicitly join by single newline so that the lines map 1:1 with the syllable counter UI
+      let text = '';
+      editor.state.doc.descendants((node, pos) => {
+        if (node.isText) {
+          text += node.text;
+        } else if (node.isBlock && pos > 0) {
+          text += '\n';
+        }
+      });
       updateBlock(block.id, { content: text });
       calculateSyllables(text);
     },
@@ -160,7 +168,7 @@ export const Block: React.FC<BlockProps> = ({ block }) => {
         {/* Editor Area & Syllables */}
         <div className="flex relative">
           <div
-            className="flex-1 p-4 cursor-text"
+            className="flex-1 p-4 cursor-text prose-p:my-0 prose-p:leading-[1.5em] prose-p:text-[14px]"
             onDoubleClick={() => {
               if (editor) {
                 const { from, to } = editor.state.selection;
@@ -177,11 +185,11 @@ export const Block: React.FC<BlockProps> = ({ block }) => {
           </div>
 
           {/* Syllables Column */}
-          <div className="w-12 border-l border-[#333] flex flex-col items-center pt-4 text-xs font-mono text-gray-500 bg-[#1a1a1a] select-none" style={{ lineHeight: '1.5em', fontSize: '14px' }}>
+          <div className="w-12 border-l border-[#333] flex flex-col items-center pt-4 text-xs font-mono text-gray-500 bg-[#1a1a1a] select-none">
             {block.content.split('\n').map((line, i) => {
               const count = syllables[i] || 0;
               return (
-                <div key={i} className="h-[1.5em] flex items-center justify-center">
+                <div key={i} className="h-[1.5em] text-[14px] flex items-center justify-center w-full" style={{ lineHeight: '1.5em' }}>
                   {line.trim() !== '' ? <span className="bg-[#2a2a2a] px-1 rounded hover:bg-gray-600 cursor-pointer" title="Silben">[{count}]</span> : ''}
                 </div>
               );
