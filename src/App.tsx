@@ -1,11 +1,13 @@
 import { BlockList } from "./components/BlockList";
 import { Sidebar } from "./components/Sidebar";
 import { useAppStore } from "./store";
+import { useState } from "react";
 import { openProject, saveProject, exportToMarkdown, exportToText } from "./utils/fileManager";
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, Download, ChevronDown } from "lucide-react";
 
 function App() {
-  const { project, setProject, showHighlights, toggleHighlights } = useAppStore();
+  const { project, setProject, setMetadata, showHighlights, toggleHighlights } = useAppStore();
+  const [exportOpen, setExportOpen] = useState(false);
 
   const handleOpen = async () => {
     const loaded = await openProject();
@@ -61,12 +63,58 @@ function App() {
               Highlights
             </button>
             <div className="h-9 w-px bg-[#333] mx-1"></div>
-            <button onClick={handleExportMd} className="bg-[#1a1a1a] hover:bg-[#2a2a2a] border border-[#3a3a3a] text-sm px-3 py-2 rounded-md font-medium transition-all shadow-sm">.md</button>
-            <button onClick={handleExportTxt} className="bg-[#1a1a1a] hover:bg-[#2a2a2a] border border-[#3a3a3a] text-sm px-3 py-2 rounded-md font-medium transition-all shadow-sm">.txt</button>
+
+            <div className="relative">
+              <button
+                onClick={() => setExportOpen(!exportOpen)}
+                className="flex items-center gap-2 bg-[#1a1a1a] hover:bg-[#2a2a2a] border border-[#3a3a3a] text-sm px-4 py-2 rounded-md font-medium transition-all shadow-sm"
+              >
+                <Download size={16} />
+                Export
+                <ChevronDown size={16} className={`transition-transform ${exportOpen ? 'rotate-180' : ''}`} />
+              </button>
+
+              {exportOpen && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setExportOpen(false)}></div>
+                  <div className="absolute right-0 mt-2 w-32 bg-[#1e1e1e] border border-[#333] rounded-md shadow-xl z-20 flex flex-col overflow-hidden">
+                    <button
+                      onClick={() => { handleExportTxt(); setExportOpen(false); }}
+                      className="text-left px-4 py-2 text-sm hover:bg-[#2a2a2a] border-b border-[#333] transition-colors"
+                    >
+                      Als .txt
+                    </button>
+                    <button
+                      onClick={() => { handleExportMd(); setExportOpen(false); }}
+                      className="text-left px-4 py-2 text-sm hover:bg-[#2a2a2a] transition-colors"
+                    >
+                      Als Markdown
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+
           </div>
         </header>
 
         <main className="flex-1 w-full max-w-4xl mx-auto">
+          <div className="mb-6 flex gap-4">
+            <input
+              type="text"
+              placeholder="Song Titel"
+              value={project.metadata.title}
+              onChange={(e) => setMetadata({ title: e.target.value })}
+              className="bg-transparent text-2xl font-bold border-b border-[#444] focus:border-green-500 outline-none pb-1 flex-1 placeholder-gray-600 transition-colors"
+            />
+            <input
+              type="text"
+              placeholder="Künstler / Autor"
+              value={project.metadata.artist}
+              onChange={(e) => setMetadata({ artist: e.target.value })}
+              className="bg-transparent text-xl font-medium text-gray-400 border-b border-[#444] focus:border-green-500 outline-none pb-1 w-1/3 placeholder-gray-600 transition-colors"
+            />
+          </div>
           <BlockList />
         </main>
       </div>
