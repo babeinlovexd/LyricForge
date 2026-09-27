@@ -271,6 +271,14 @@ pub fn analyze_rhymes(text: &str, lang: &str) -> RhymeAnalysisResult {
 }
 
 #[tauri::command]
+pub fn add_custom_word(new_word: &str, pattern_word: &str, lang: &str) -> Result<String, String> {
+    match crate::dictionary::add_custom_word(new_word, pattern_word, lang) {
+        Ok(_) => Ok(format!("Wort '{}' erfolgreich hinzugefügt.", new_word)),
+        Err(e) => Err(e),
+    }
+}
+
+#[tauri::command]
 pub fn find_rhymes_for_word(word: &str, mode: &str, lang: &str) -> Vec<RhymeResultGrouped> {
     dictionary::init_db_local();
 

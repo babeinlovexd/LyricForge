@@ -22,3 +22,12 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+de.txt
+node_modules/
+dist/
+src-tauri/target/
+de_dict.txt
+en_US_dict.txt
+test_files.sh
+tmp_wc.sh
+build_large_db.py

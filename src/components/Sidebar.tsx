@@ -15,13 +15,19 @@ interface RhymeResultGrouped {
 
 export const Sidebar: React.FC = () => {
   const { isSidebarOpen, setSidebarOpen, activeWord, activeBlockId, project, updateBlock } = useAppStore();
-  const [activeTab, setActiveTab] = useState<'Rein' | 'Assonanz' | 'Vokalklang'>('Rein');
+  const [activeTab, setActiveTab] = useState<'Rein' | 'Assonanz' | 'Vokalklang' | 'Lernen'>('Rein');
   const [langFilter, setLangFilter] = useState<'Alle' | 'DE' | 'EN'>('Alle');
   const [results, setResults] = useState<RhymeResultGrouped[]>([]);
   const [loading, setLoading] = useState(false);
 
+  // Teach Word form state
+  const [newWord, setNewWord] = useState('');
+  const [patternWord, setPatternWord] = useState('');
+  const [teachLang, setTeachLang] = useState('de');
+  const [teachMessage, setTeachMessage] = useState('');
+
   useEffect(() => {
-    if (activeWord && isSidebarOpen) {
+    if (activeWord && isSidebarOpen && activeTab !== 'Lernen') {
       fetchRhymes(activeWord, activeTab);
     }
   }, [activeWord, activeTab, isSidebarOpen]);
@@ -68,6 +74,27 @@ export const Sidebar: React.FC = () => {
     // Optional: show a small toast "Copied!"
   };
 
+  const handleTeachWord = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setTeachMessage('');
+    if (!newWord || !patternWord) return;
+
+    try {
+      const res = await invoke<string>('add_custom_word', {
+        newWord,
+        patternWord,
+        lang: teachLang
+      });
+      setTeachMessage(`✓ ${res}`);
+      setNewWord('');
+      setPatternWord('');
+      // Optional: switch back to Rein tab to test it
+      setTimeout(() => setTeachMessage(''), 3000);
+    } catch (err: any) {
+      setTeachMessage(`❌ Fehler: ${err}`);
+    }
+  };
+
   if (!isSidebarOpen) return null;
 
   return (
@@ -88,31 +115,87 @@ export const Sidebar: React.FC = () => {
 
       <div className="flex flex-col border-b border-[#333]">
         <div className="flex">
-          {(['Rein', 'Assonanz', 'Vokalklang'] as const).map(tab => (
+          {(['Rein', 'Assonanz', 'Vokalklang', 'Lernen'] as const).map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`flex-1 py-2 text-xs font-medium text-center transition-colors ${activeTab === tab ? 'bg-[#333] text-white border-b-2 border-blue-400' : 'text-gray-500 hover:bg-[#222]'}`}
+              className={`flex-1 py-2 text-[10px] font-medium text-center transition-colors ${activeTab === tab ? 'bg-[#333] text-white border-b-2 border-blue-400' : 'text-gray-500 hover:bg-[#222]'}`}
             >
               {tab}
             </button>
           ))}
         </div>
-        <div className="flex bg-[#1e1e1e] border-t border-[#2a2a2a]">
-          {(['Alle', 'DE', 'EN'] as const).map(lang => (
-            <button
-              key={lang}
-              onClick={() => setLangFilter(lang)}
-              className={`flex-1 py-1.5 text-[10px] uppercase tracking-widest text-center transition-colors ${langFilter === lang ? 'bg-[#2a2a2a] text-white font-bold' : 'text-gray-500 hover:bg-[#222]'}`}
-            >
-              Nur {lang === 'Alle' ? 'Alle' : lang}
-            </button>
-          ))}
-        </div>
+        {activeTab !== 'Lernen' && (
+          <div className="flex bg-[#1e1e1e] border-t border-[#2a2a2a]">
+            {(['Alle', 'DE', 'EN'] as const).map(lang => (
+              <button
+                key={lang}
+                onClick={() => setLangFilter(lang)}
+                className={`flex-1 py-1.5 text-[10px] uppercase tracking-widest text-center transition-colors ${langFilter === lang ? 'bg-[#2a2a2a] text-white font-bold' : 'text-gray-500 hover:bg-[#222]'}`}
+              >
+                Nur {lang === 'Alle' ? 'Alle' : lang}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="flex-1 overflow-y-auto p-4">
-        {loading ? (
+        {activeTab === 'Lernen' ? (
+          <form onSubmit={handleTeachWord} className="flex flex-col gap-4">
+            <h3 className="font-bold text-gray-300 mb-2">Wort beibringen</h3>
+            <p className="text-xs text-gray-500 mb-2">Füge der lokalen Datenbank ein Slang- oder Kunstwort hinzu, indem du ein bekanntes Reimwort als Muster angibst.</p>
+
+            <label className="flex flex-col gap-1 text-sm text-gray-400">
+              Neues Wort:
+              <input
+                type="text"
+                value={newWord}
+                onChange={(e) => setNewWord(e.target.value)}
+                className="bg-[#111] border border-[#333] rounded p-2 text-white outline-none focus:border-blue-500"
+                placeholder="z.B. Bratan"
+                required
+              />
+            </label>
+
+            <label className="flex flex-col gap-1 text-sm text-gray-400">
+              Reimt sich auf / Musterwort:
+              <input
+                type="text"
+                value={patternWord}
+                onChange={(e) => setPatternWord(e.target.value)}
+                className="bg-[#111] border border-[#333] rounded p-2 text-white outline-none focus:border-blue-500"
+                placeholder="z.B. Satan"
+                required
+              />
+            </label>
+
+            <label className="flex flex-col gap-1 text-sm text-gray-400">
+              Sprache:
+              <select
+                value={teachLang}
+                onChange={(e) => setTeachLang(e.target.value)}
+                className="bg-[#111] border border-[#333] rounded p-2 text-white outline-none focus:border-blue-500"
+              >
+                <option value="de">Deutsch</option>
+                <option value="en">Englisch</option>
+              </select>
+            </label>
+
+            <button
+              type="submit"
+              className="mt-2 bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-4 rounded transition-colors"
+            >
+              Wort speichern
+            </button>
+
+            {teachMessage && (
+              <div className={`mt-2 p-2 rounded text-sm ${teachMessage.startsWith('✓') ? 'bg-green-900/50 text-green-400' : 'bg-red-900/50 text-red-400'}`}>
+                {teachMessage}
+              </div>
+            )}
+          </form>
+        ) : loading ? (
           <div className="text-center text-gray-500 py-8">Suche Reime...</div>
         ) : results.length === 0 ? (
           <div className="text-center text-gray-500 py-8">Keine Ergebnisse gefunden.</div>

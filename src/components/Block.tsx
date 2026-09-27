@@ -60,6 +60,11 @@ export const Block: React.FC<BlockProps> = ({ block }) => {
       }),
       RhymeHighlight,
     ],
+    editorProps: {
+      attributes: {
+        spellcheck: 'false',
+      },
+    },
     content: block.content.split('\n').map(line => `<p>${line}</p>`).join(''),
     onUpdate: ({ editor }) => {
       // Get plain text for storing and syllables

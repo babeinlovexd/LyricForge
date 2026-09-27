@@ -21,7 +21,8 @@ pub fn run() {
             greet,
             linguistics::calculate_syllables,
             linguistics::analyze_rhymes,
-            linguistics::find_rhymes_for_word
+            linguistics::find_rhymes_for_word,
+            linguistics::add_custom_word
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

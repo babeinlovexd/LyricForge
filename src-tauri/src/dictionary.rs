@@ -18,9 +18,25 @@ pub fn init_db(handle: &tauri::AppHandle) {
             .resolve("resources/dictionary.db", tauri::path::BaseDirectory::Resource)
             .expect("Failed to resolve dictionary.db");
 
+        let app_data_dir = handle
+            .path()
+            .app_data_dir()
+            .expect("Failed to resolve app data dir");
+
+        if !app_data_dir.exists() {
+            std::fs::create_dir_all(&app_data_dir).expect("Failed to create app data dir");
+        }
+
+        let user_db_path = app_data_dir.join("dictionary.db");
+
+        if !user_db_path.exists() {
+            // Copy bundled db to app_data_dir
+            std::fs::copy(&resource_path, &user_db_path).expect("Failed to copy dictionary.db to app data dir");
+        }
+
         let conn = Connection::open_with_flags(
-            resource_path,
-            OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX
+            user_db_path,
+            OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_NO_MUTEX
         ).expect("Failed to open dictionary database");
 
         Mutex::new(conn)
@@ -32,7 +48,7 @@ pub fn init_db_local() {
     DB_CONN.get_or_init(|| {
         let conn = Connection::open_with_flags(
             "resources/dictionary.db",
-            OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX
+            OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_NO_MUTEX
         ).expect("Failed to open dictionary database locally");
         Mutex::new(conn)
     });
@@ -59,14 +75,50 @@ pub fn get_word_attributes(word: &str, lang: &str) -> Option<WordAttributes> {
 
     if let Some(row) = rows.next().ok().flatten() {
         let syll_int: i32 = row.get(1).unwrap_or(1);
-        Some(WordAttributes {
+        return Some(WordAttributes {
             ipa: row.get(0).unwrap_or_default(),
             syllables: syll_int as usize,
             rhyme_part: row.get(2).unwrap_or_default(),
             vowels_clean: row.get(3).unwrap_or_default(),
-        })
-    } else {
-        None
+        });
+    }
+
+    None
+}
+
+pub fn add_custom_word(new_word: &str, pattern_word: &str, lang: &str) -> Result<(), String> {
+    let new_word_lower = new_word.to_lowercase();
+    let pattern_word_lower = pattern_word.to_lowercase();
+    let lang_lower = lang.to_lowercase();
+
+    // 1. Get attributes from pattern word
+    let attr = match get_word_attributes(&pattern_word_lower, &lang_lower) {
+        Some(a) => a,
+        None => return Err(format!("Musterwort '{}' nicht in der Datenbank gefunden.", pattern_word)),
+    };
+
+    let lock = match DB_CONN.get() {
+        Some(l) => l,
+        None => return Err("Datenbankverbindung fehlgeschlagen.".into()),
+    };
+    let conn = lock.lock().unwrap();
+
+    // 2. Insert or Replace the new word with the pattern's phonetic attributes
+    let query = "INSERT OR REPLACE INTO words (word, lang, ipa, syllables, rhyme_part, vowels_clean) VALUES (?1, ?2, ?3, ?4, ?5, ?6)";
+    let syllables_i32 = attr.syllables as i32;
+    match conn.execute(
+        query,
+        (
+            &new_word_lower,
+            &lang_lower,
+            &attr.ipa,
+            &syllables_i32,
+            &attr.rhyme_part,
+            &attr.vowels_clean,
+        ),
+    ) {
+        Ok(_) => Ok(()),
+        Err(e) => Err(format!("Datenbankfehler beim Hinzufügen: {}", e)),
     }
 }
 
