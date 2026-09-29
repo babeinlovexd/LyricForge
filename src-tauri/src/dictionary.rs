@@ -95,15 +95,15 @@ pub fn get_word_attributes(word: &str, lang: &str) -> Option<WordAttributes> {
     let conn = lock.lock().unwrap();
 
     let language = lang.to_lowercase();
-    if language == "auto" || language == "alle" {
+    if language == "auto" || language == "alle" || language.is_empty() {
         let de = get_word_attributes_unlocked(&conn, &word_lower, "de");
         let en = get_word_attributes_unlocked(&conn, &word_lower, "en");
-        return match (de, en) { (Some(a), None) | (None, Some(a)) => Some(a), _ => None };
+        return de.or(en);
     }
     get_word_attributes_unlocked(&conn, &word_lower, &language)
 }
 
-fn get_word_attributes_unlocked(conn: &Connection, word: &str, lang: &str) -> Option<WordAttributes> {
+pub fn get_word_attributes_unlocked(conn: &Connection, word: &str, lang: &str) -> Option<WordAttributes> {
     if lang != "de" && lang != "en" { return None; }
     let mut stmt = conn.prepare_cached("SELECT ipa, syllables, rhyme_part, vowels_clean FROM (
         SELECT * FROM words UNION ALL SELECT * FROM bundled_db.words
@@ -161,9 +161,11 @@ pub fn add_custom_word(new_word: &str, pattern_word: &str, lang: &str) -> Result
 }
 
 pub fn get_all_rhymes(word: &str, mode: &str, filter_lang: &str) -> Vec<(String, String)> {
-    let target = match get_word_attributes(word, filter_lang) {
-        Some(t) => t,
-        None => return vec![],
+    let filter_lower = filter_lang.to_lowercase();
+    let target_langs: Vec<&str> = if filter_lower == "auto" || filter_lower == "alle" || filter_lower.is_empty() {
+        vec!["de", "en"]
+    } else {
+        vec![filter_lower.as_str()]
     };
 
     let lock = match DB_CONN.get() {
@@ -174,60 +176,48 @@ pub fn get_all_rhymes(word: &str, mode: &str, filter_lang: &str) -> Vec<(String,
 
     let word_lower = word.to_lowercase();
     let mut results = Vec::new();
+    let mut seen = std::collections::HashSet::new();
 
-    let target_vowels_normalized = target.vowels_clean.clone();
+    for lang_code in target_langs {
+        let target = match get_word_attributes_unlocked(&conn, &word_lower, lang_code) {
+            Some(t) => t,
+            None => continue,
+        };
 
-    let query_base = match mode {
-        "rein" => "SELECT word, lang FROM (SELECT * FROM words UNION ALL SELECT * FROM bundled_db.words) WHERE rhyme_part = ?1 AND word != ?2",
-        "assonanz" => "SELECT word, lang FROM (SELECT * FROM words UNION ALL SELECT * FROM bundled_db.words) WHERE vowels_clean = ?1 AND rhyme_part != ?2 AND word != ?3",
-        "vokalklang" => "SELECT word, lang FROM (SELECT * FROM words UNION ALL SELECT * FROM bundled_db.words) WHERE vowels_clean = ?1 AND word != ?2",
-        _ => return vec![],
-    };
+        let target_vowels_normalized = target.vowels_clean.clone();
+        if target.rhyme_part.is_empty() || (mode != "rein" && target.vowels_clean.is_empty()) { continue; }
 
-    let is_lang_filtered = true;
-    if target.rhyme_part.is_empty() || (mode != "rein" && target.vowels_clean.is_empty()) { return vec![]; }
+        let query_base = match mode {
+            "rein" => "SELECT word, lang FROM (SELECT * FROM words UNION ALL SELECT * FROM bundled_db.words) WHERE rhyme_part = ?1 AND word != ?2 AND lang = ?3",
+            "assonanz" => "SELECT word, lang FROM (SELECT * FROM words UNION ALL SELECT * FROM bundled_db.words) WHERE vowels_clean = ?1 AND rhyme_part != ?2 AND word != ?3 AND lang = ?4",
+            "vokalklang" => "SELECT word, lang FROM (SELECT * FROM words UNION ALL SELECT * FROM bundled_db.words) WHERE vowels_clean = ?1 AND word != ?2 AND lang = ?3",
+            _ => return vec![],
+        };
 
-    // Note: The inner UNION queries return rows with 'lang'. So we can filter on the outer select!
-    let mut query = if is_lang_filtered {
-        format!("{} AND lang = ?{}", query_base, if mode == "assonanz" { 4 } else { 3 })
-    } else {
-        query_base.to_string()
-    };
+        let query = format!("{} ORDER BY syllables ASC, word ASC LIMIT 250", query_base);
+        let mut stmt = match conn.prepare(&query) {
+            Ok(s) => s,
+            Err(_) => continue,
+        };
 
-    query.push_str(" ORDER BY syllables ASC, word ASC LIMIT 250");
+        let mut rows = match mode {
+            "rein" => stmt.query((&target.rhyme_part, &word_lower, lang_code)),
+            "assonanz" => stmt.query((&target_vowels_normalized, &target.rhyme_part, &word_lower, lang_code)),
+            "vokalklang" => stmt.query((&target_vowels_normalized, &word_lower, lang_code)),
+            _ => unreachable!(),
+        };
 
-    let mut stmt = conn.prepare(&query).unwrap();
-    let lower_lang = target.lang;
-
-    let mut rows = match mode {
-        "rein" => {
-            if is_lang_filtered {
-                stmt.query((&target.rhyme_part, &word_lower, &lower_lang)).unwrap()
-            } else {
-                stmt.query((&target.rhyme_part, &word_lower)).unwrap()
+        if let Ok(mut r_iter) = rows {
+            while let Ok(Some(row)) = r_iter.next() {
+                let w: String = row.get(0).unwrap_or_default();
+                let l: String = row.get(1).unwrap_or_default();
+                let key = (w.clone(), l.to_uppercase());
+                if !seen.contains(&key) {
+                    seen.insert(key.clone());
+                    results.push(key);
+                }
             }
-        },
-        "assonanz" => {
-            if is_lang_filtered {
-                stmt.query((&target_vowels_normalized, &target.rhyme_part, &word_lower, &lower_lang)).unwrap()
-            } else {
-                stmt.query((&target_vowels_normalized, &target.rhyme_part, &word_lower)).unwrap()
-            }
-        },
-        "vokalklang" => {
-            if is_lang_filtered {
-                stmt.query((&target_vowels_normalized, &word_lower, &lower_lang)).unwrap()
-            } else {
-                stmt.query((&target_vowels_normalized, &word_lower)).unwrap()
-            }
-        },
-        _ => unreachable!(),
-    };
-
-    while let Some(row) = rows.next().unwrap() {
-        let w: String = row.get(0).unwrap();
-        let l: String = row.get(1).unwrap();
-        results.push((w, l.to_uppercase()));
+        }
     }
 
     results

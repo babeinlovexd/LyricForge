@@ -49,24 +49,35 @@ body {
   text-underline-offset: 3px;
 }
 
-/* Assonanzen & Vokalklänge standardmäßig sichtbar */
+/* Assonanzen: standardmäßig ganz leicht gelb eingefärbt (ohne störende Unterstreichung) */
 .hl-yellow {
-  text-decoration: underline 2px dotted #facc15;
-  text-underline-offset: 3px;
-}
-.hl-purple {
-  background-color: rgba(168, 85, 247, 0.2);
+  background-color: rgba(250, 204, 21, 0.15);
   border-radius: 2px;
+  padding: 0 1px;
 }
 
-/* Nur aktiv bei Hover über die zugehörige Gruppe (Optional Highlight Booster) */
+/* Vokalklänge: standardmäßig leicht violett eingefärbt */
+.hl-purple {
+  background-color: rgba(168, 85, 247, 0.18);
+  border-radius: 2px;
+  padding: 0 1px;
+}
+
+/* Hover-Effekte: Wort und zugehörige Reimpartner werden gemeinsam hervorgehoben und unterstrichen */
 .hover-active-yellow {
-  text-decoration: underline 2px dotted #facc15 !important;
+  text-decoration: underline 2px solid #facc15 !important;
   text-underline-offset: 3px;
-  background-color: rgba(250, 204, 21, 0.2);
+  background-color: rgba(250, 204, 21, 0.35) !important;
 }
 .hover-active-purple {
-  background-color: rgba(168, 85, 247, 0.4) !important;
+  text-decoration: underline 2px solid #a855f7 !important;
+  text-underline-offset: 3px;
+  background-color: rgba(168, 85, 247, 0.45) !important;
+}
+.hover-active-moss-green,
+.hover-active-light-green {
+  background-color: rgba(76, 175, 80, 0.25) !important;
+  border-radius: 2px;
 }
 
 /* Base styles for active words */

@@ -145,10 +145,27 @@ pub fn analyze_rhymes(text: &str, lang: &str) -> RhymeAnalysisResult {
 
     let mut all_matches: Vec<HighlightMatch> = Vec::new();
     let mut parents: Vec<usize> = (0..word_matches.len()).collect();
-    let attributes: Vec<_> = word_matches.iter().map(|m| dictionary::get_word_attributes(m.as_str(), lang)).collect();
 
-    // Track the highest priority match for each word: priority 4 (moss-green) > 3 (light-green) > 2 (yellow) > 1 (purple)
-    // We map start index to (priority, HighlightMatch)
+    // Fetch both DE and EN attributes for multi-language evaluation
+    let word_attrs: Vec<(Option<dictionary::WordAttributes>, Option<dictionary::WordAttributes>)> = word_matches
+        .iter()
+        .map(|m| {
+            let w = m.as_str();
+            let lang_lower = lang.to_lowercase();
+            if lang_lower == "auto" || lang_lower == "alle" || lang_lower.is_empty() {
+                (
+                    dictionary::get_word_attributes(w, "de"),
+                    dictionary::get_word_attributes(w, "en"),
+                )
+            } else if lang_lower == "de" {
+                (dictionary::get_word_attributes(w, "de"), None)
+            } else {
+                (None, dictionary::get_word_attributes(w, "en"))
+            }
+        })
+        .collect();
+
+    // Track the highest priority match for each word: priority 4 (moss-green) > 3 (light-green) > 2 (purple) > 1 (yellow)
     let mut best_matches: std::collections::HashMap<usize, (u8, HighlightMatch)> = std::collections::HashMap::new();
 
     if word_matches.len() > 1 {
@@ -177,31 +194,22 @@ pub fn analyze_rhymes(text: &str, lang: &str) -> RhymeAnalysisResult {
                 let start2 = *byte_to_char.get(&word_matches[j].start()).unwrap_or(&0);
                 let end2 = *byte_to_char.get(&word_matches[j].end()).unwrap_or(&0);
 
-                if let (Some(attr1), Some(attr2)) = (&attributes[i], &attributes[j]) {
-                    if attr1.lang != attr2.lang { continue; }
+                let (de1, en1) = &word_attrs[i];
+                let (de2, en2) = &word_attrs[j];
+
+                // Build candidate pairs (e.g. DE vs DE, EN vs EN)
+                let mut candidates = Vec::new();
+                if let (Some(a1), Some(a2)) = (de1, de2) { candidates.push((a1, a2)); }
+                if let (Some(a1), Some(a2)) = (en1, en2) { candidates.push((a1, a2)); }
+
+                for (attr1, attr2) in candidates {
                     let r1 = &attr1.rhyme_part;
                     let r2 = &attr2.rhyme_part;
 
                     if !r1.is_empty() && !r2.is_empty() {
                         let is_pure = r1 == r2;
-
                         let v1 = &attr1.vowels_clean;
                         let v2 = &attr2.vowels_clean;
-
-                        // We count actual IPA vowels which may be multi-char.
-                        // With vowels_clean being squashed together in build_db.py,
-                        // we can regex split or length check. Since Python built vowels_clean as "aɪo"
-                        // we can do a rough count by checking length / 1.5 or split it on known boundaries.
-                        // A more robust way is querying syllables.
-                        let v1_count = attr1.syllables;
-
-                        // Assonance is true if the clean vowels string matches, but the trailing consonants (rhyme part) differ.
-                        let is_asso = !is_pure && v1_count > 0 && !v1.is_empty() && v1 == v2;
-
-                        let mut is_vocal = false;
-                        if !v1.is_empty() && v1 == v2 {
-                            is_vocal = true;
-                        }
 
                         let is_end_rhyme_i = line_end_indices.contains(&i);
                         let is_end_rhyme_j = line_end_indices.contains(&j);
@@ -210,7 +218,11 @@ pub fn analyze_rhymes(text: &str, lang: &str) -> RhymeAnalysisResult {
                         let mut match_type_found = None;
                         let mut priority = 0;
 
-                        // Priority: End rhymes must be moss-green if pure. Stop words are only allowed if pure rhyme at line end.
+                        // Priority:
+                        // 4: Pure end rhyme (moss-green)
+                        // 3: Pure internal rhyme (light-green)
+                        // 2: Multi-syllable vocal harmony / Vokalklang (purple)
+                        // 1: Assonance (yellow)
                         if is_pure && (!is_stop_word || is_end_rhyme) {
                             if is_end_rhyme_i || is_end_rhyme_j {
                                 match_type_found = Some("moss-green".to_string());
@@ -219,12 +231,21 @@ pub fn analyze_rhymes(text: &str, lang: &str) -> RhymeAnalysisResult {
                                 match_type_found = Some("light-green".to_string());
                                 priority = 3;
                             }
-                        } else if is_asso && !is_stop_word {
-                             match_type_found = Some("yellow".to_string());
-                             priority = 2;
-                        } else if is_vocal && !is_stop_word {
-                             match_type_found = Some("purple".to_string());
-                             priority = 1;
+                        } else if !is_pure && !v1.is_empty() && v1 == v2 && !is_stop_word {
+                            if attr1.syllables > 1 || attr2.syllables > 1 {
+                                match_type_found = Some("purple".to_string());
+                                priority = 2;
+                            } else {
+                                match_type_found = Some("yellow".to_string());
+                                priority = 1;
+                            }
+                        } else if !is_pure && !v1.is_empty() && !v2.is_empty() && !is_stop_word {
+                            let last1 = v1.chars().last();
+                            let last2 = v2.chars().last();
+                            if last1.is_some() && last1 == last2 {
+                                match_type_found = Some("yellow".to_string());
+                                priority = 1;
+                            }
                         }
 
                         if let Some(mt) = match_type_found {

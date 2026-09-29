@@ -82,8 +82,7 @@ export const RhymeHighlight = Extension.create({
 
                  let className = `hl-${match.match_type}`;
                  if (isActive) {
-                    if (match.match_type === 'yellow') className += ' hover-active-yellow';
-                    if (match.match_type === 'purple') className += ' hover-active-purple';
+                    className += ` hover-active hover-active-${match.match_type}`;
                  }
 
                  if (match.start >= 0 && match.end <= tr.doc.content.size) {

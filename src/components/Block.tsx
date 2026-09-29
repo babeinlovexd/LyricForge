@@ -82,15 +82,15 @@ export const Block: React.FC<BlockProps> = ({ block }) => {
 
   useEffect(() => {
     let cancelled = false;
-    invoke<number[]>('calculate_syllables', { text: block.content, lang: block.language })
+    invoke<number[]>('calculate_syllables', { text: block.content, lang: 'auto' })
       .then(result => { if (!cancelled) setSyllables(result); })
       .catch(console.error);
     return () => { cancelled = true; };
-  }, [block.content, block.language]);
+  }, [block.content]);
 
   useEffect(() => {
-    if (editor) editor.view.dispatch(editor.state.tr.setMeta('rhymeLanguage', block.language));
-  }, [editor, block.language]);
+    if (editor) editor.view.dispatch(editor.state.tr.setMeta('rhymeLanguage', 'auto'));
+  }, [editor]);
 
   useEffect(() => {
     if (editor && editor.getText({ blockSeparator: '\n' }) !== block.content) {
@@ -148,16 +148,6 @@ export const Block: React.FC<BlockProps> = ({ block }) => {
                 className="bg-[#111] text-white border border-[#444] rounded px-2 py-1 text-sm w-32"
               />
             )}
-
-            <select
-              value={block.language}
-              onChange={(e) => updateBlock(block.id, { language: e.target.value as any })}
-              className="bg-[#111] text-white border border-[#444] rounded px-2 py-1 text-sm"
-            >
-              <option value="auto">Auto</option>
-              <option value="de">DE</option>
-              <option value="en">EN</option>
-            </select>
           </div>
 
           <div className="flex items-center space-x-2">

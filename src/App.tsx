@@ -30,7 +30,7 @@ function App() {
 
   return (
     <div className="h-screen w-screen bg-[#121212] text-white flex flex-col overflow-hidden">
-      <header className="shrink-0 w-full p-4 border-b border-[#2a2a2a] bg-[#1a1a1a] flex justify-between items-center">
+      <header className="shrink-0 w-full p-4 border-b border-[#2a2a2a] bg-[#1a1a1a] flex justify-between items-center relative z-30">
         <div className="flex items-center gap-4 pl-4">
           <img src="/LF.png" alt="LyricForge Logo" className="h-16 w-auto object-contain drop-shadow-md" />
           <div>
@@ -97,7 +97,7 @@ function App() {
         </div>
       </header>
 
-      <div className="flex-1 flex flex-row overflow-hidden min-h-0">
+      <div className="flex-1 flex flex-row overflow-hidden min-h-0 relative">
         <main className="flex-1 overflow-y-auto p-4 min-h-0 w-full max-w-4xl mx-auto">
           <div className="mb-6 flex gap-4">
             <input
@@ -117,9 +117,8 @@ function App() {
           </div>
           <BlockList />
         </main>
+        <Sidebar />
       </div>
-
-      <Sidebar />
     </div>
   );
 }
