@@ -26,27 +26,21 @@ export const Sidebar: React.FC = () => {
   const [teachLang, setTeachLang] = useState('de');
   const [teachMessage, setTeachMessage] = useState('');
 
+  const blockLanguage = project.blocks.find(b => b.id === activeBlockId)?.language ?? 'auto';
   useEffect(() => {
-    if (activeWord && isSidebarOpen && activeTab !== 'Lernen') {
-      fetchRhymes(activeWord, activeTab, langFilter);
-    }
-  }, [activeWord, activeTab, langFilter, isSidebarOpen]);
-
-  const fetchRhymes = async (word: string, mode: string, filter: string) => {
-    setLoading(true);
-    try {
-      const response = await invoke<RhymeResultGrouped[]>('find_rhymes_for_word', {
-        word,
-        mode: mode.toLowerCase(),
-        lang: filter.toLowerCase(),
-      });
-      setResults(response);
-    } catch (e) {
-      console.error(e);
-      setResults([]);
-    }
+    let cancelled = false;
+    setResults([]);
     setLoading(false);
-  };
+    if (activeWord && isSidebarOpen && activeTab !== 'Lernen') {
+      setLoading(true);
+      invoke<RhymeResultGrouped[]>('find_rhymes_for_word', {
+        word: activeWord, mode: activeTab.toLowerCase(),
+        lang: langFilter === 'Alle' ? blockLanguage : langFilter.toLowerCase(),
+      }).then(response => { if (!cancelled) setResults(response); })
+        .catch(console.error).finally(() => { if (!cancelled) setLoading(false); });
+    }
+    return () => { cancelled = true; };
+  }, [activeWord, activeTab, langFilter, isSidebarOpen, blockLanguage]);
 
   const handleWordClick = (word: string) => {
     if (activeBlockId) {

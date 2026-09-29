@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { v4 as uuidv4 } from 'uuid';
 import { BlockData, ProjectData } from '../types';
+import { parseProject, touchProject } from '../utils/project';
 
 interface AppState {
   project: ProjectData;
@@ -55,22 +56,22 @@ const defaultProject: ProjectData = {
 export const useAppStore = create<AppState>((set) => ({
   project: defaultProject,
 
-  setProject: (project) => set({ project }),
+  setProject: (project) => set({ project: parseProject(project), activeWord: null, activeBlockId: null }),
 
   setMetadata: (updates) => set((state) => ({
-    project: {
+    project: touchProject({
       ...state.project,
       metadata: { ...state.project.metadata, ...updates }
-    }
+    })
   })),
 
   updateBlock: (id, updates) => set((state) => ({
-    project: {
+    project: touchProject({
       ...state.project,
       blocks: state.project.blocks.map(block =>
         block.id === id ? { ...block, ...updates } : block
       ),
-    }
+    })
   })),
 
   addBlock: (index) => set((state) => {
@@ -78,7 +79,7 @@ export const useAppStore = create<AppState>((set) => ({
       id: uuidv4(),
       type: "Verse",
       customTitle: "",
-      language: "auto",
+      language: state.project.settings.defaultLanguage,
       content: "",
     };
 
@@ -89,7 +90,7 @@ export const useAppStore = create<AppState>((set) => ({
       blocks.push(newBlock);
     }
 
-    return { project: { ...state.project, blocks } };
+    return { project: touchProject({ ...state.project, blocks }) };
   }),
 
   duplicateBlock: (id) => set((state) => {
@@ -105,7 +106,7 @@ export const useAppStore = create<AppState>((set) => ({
     const blocks = [...state.project.blocks];
     blocks.splice(index + 1, 0, newBlock);
 
-    return { project: { ...state.project, blocks } };
+    return { project: touchProject({ ...state.project, blocks }) };
   }),
 
   removeBlock: (id) => set((state) => {
@@ -116,10 +117,10 @@ export const useAppStore = create<AppState>((set) => ({
     }
 
     return {
-      project: {
+      project: touchProject({
         ...state.project,
         blocks: state.project.blocks.filter(b => b.id !== id),
-      }
+      })
     };
   }),
 
@@ -133,7 +134,7 @@ export const useAppStore = create<AppState>((set) => ({
       blocks.splice(newIndex, 0, moved);
     }
 
-    return { project: { ...state.project, blocks } };
+    return { project: touchProject({ ...state.project, blocks }) };
   }),
 
   isSidebarOpen: false,

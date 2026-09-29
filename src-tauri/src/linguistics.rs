@@ -35,6 +35,9 @@ lazy_static::lazy_static! {
 }
 
 pub fn count_syllables_word(word: &str, lang: &str) -> usize {
+    if word.is_empty() { return 0; }
+    let language = lang.to_lowercase();
+    let lang = language.as_str();
     // 1. Try to get exact syllable count from SQLite
     if let Some(attrs) = dictionary::get_word_attributes(word, lang) {
         if attrs.syllables > 0 {
@@ -46,7 +49,7 @@ pub fn count_syllables_word(word: &str, lang: &str) -> usize {
     let dict = match lang {
         "en" => &*EN_DICT,
         "de" => &*DE_DICT,
-        _ => &*DE_DICT, // default to DE
+        _ => return Regex::new(r"(?i)[aeiouyäöü]+").unwrap().find_iter(word).count().max(1),
     };
     use hyphenation::Hyphenator;
     let hyphenated = dict.hyphenate(word);
@@ -92,12 +95,12 @@ pub fn analyze_rhymes(text: &str, lang: &str) -> RhymeAnalysisResult {
         word_matches.push(mat);
     }
 
-    // We need char indices, not byte indices, for JS interop
+    // JavaScript and ProseMirror positions use UTF-16 code units.
     let mut current_char_idx = 0;
     let mut byte_to_char = std::collections::HashMap::new();
-    for (b_idx, _) in text.char_indices() {
+    for (b_idx, ch) in text.char_indices() {
         byte_to_char.insert(b_idx, current_char_idx);
-        current_char_idx += 1;
+        current_char_idx += ch.len_utf16();
     }
     // and for end of string
     byte_to_char.insert(text.len(), current_char_idx);
@@ -141,7 +144,8 @@ pub fn analyze_rhymes(text: &str, lang: &str) -> RhymeAnalysisResult {
     }
 
     let mut all_matches: Vec<HighlightMatch> = Vec::new();
-    let mut group_counter: usize = 1;
+    let mut parents: Vec<usize> = (0..word_matches.len()).collect();
+    let attributes: Vec<_> = word_matches.iter().map(|m| dictionary::get_word_attributes(m.as_str(), lang)).collect();
 
     // Track the highest priority match for each word: priority 4 (moss-green) > 3 (light-green) > 2 (yellow) > 1 (purple)
     // We map start index to (priority, HighlightMatch)
@@ -173,15 +177,16 @@ pub fn analyze_rhymes(text: &str, lang: &str) -> RhymeAnalysisResult {
                 let start2 = *byte_to_char.get(&word_matches[j].start()).unwrap_or(&0);
                 let end2 = *byte_to_char.get(&word_matches[j].end()).unwrap_or(&0);
 
-                if let (Some(attr1), Some(attr2)) = (dictionary::get_word_attributes(w1, lang), dictionary::get_word_attributes(w2, lang)) {
-                    let r1 = attr1.rhyme_part;
-                    let r2 = attr2.rhyme_part;
+                if let (Some(attr1), Some(attr2)) = (&attributes[i], &attributes[j]) {
+                    if attr1.lang != attr2.lang { continue; }
+                    let r1 = &attr1.rhyme_part;
+                    let r2 = &attr2.rhyme_part;
 
                     if !r1.is_empty() && !r2.is_empty() {
                         let is_pure = r1 == r2;
 
-                        let v1 = attr1.vowels_clean;
-                        let v2 = attr2.vowels_clean;
+                        let v1 = &attr1.vowels_clean;
+                        let v2 = &attr2.vowels_clean;
 
                         // We count actual IPA vowels which may be multi-char.
                         // With vowels_clean being squashed together in build_db.py,
@@ -189,7 +194,6 @@ pub fn analyze_rhymes(text: &str, lang: &str) -> RhymeAnalysisResult {
                         // we can do a rough count by checking length / 1.5 or split it on known boundaries.
                         // A more robust way is querying syllables.
                         let v1_count = attr1.syllables;
-                        let v2_count = attr2.syllables;
 
                         // Assonance is true if the clean vowels string matches, but the trailing consonants (rhyme part) differ.
                         let is_asso = !is_pure && v1_count > 0 && !v1.is_empty() && v1 == v2;
@@ -224,22 +228,23 @@ pub fn analyze_rhymes(text: &str, lang: &str) -> RhymeAnalysisResult {
                         }
 
                         if let Some(mt) = match_type_found {
-                            let gid = group_counter;
-                            group_counter += 1;
+                            let root_i = root(&parents, i);
+                            let root_j = root(&parents, j);
+                            parents[root_j] = root_i;
 
                             let match1 = HighlightMatch {
                                 word: w1.to_string(),
                                 start: start1,
                                 end: end1,
                                 match_type: mt.clone(),
-                                group_id: gid,
+                                group_id: i,
                             };
                             let match2 = HighlightMatch {
                                 word: w2.to_string(),
                                 start: start2,
                                 end: end2,
                                 match_type: mt.clone(),
-                                group_id: gid,
+                                group_id: j,
                             };
 
                             let current_best_1 = best_matches.get(&start1).map(|(p, _)| *p).unwrap_or(0);
@@ -258,7 +263,8 @@ pub fn analyze_rhymes(text: &str, lang: &str) -> RhymeAnalysisResult {
         }
     }
 
-    for (_, (_, m)) in best_matches {
+    for (_, (_, mut m)) in best_matches {
+        m.group_id = root(&parents, m.group_id) + 1;
         all_matches.push(m);
     }
 
@@ -287,7 +293,7 @@ pub fn find_rhymes_for_word(word: &str, mode: &str, lang: &str) -> Vec<RhymeResu
     // Group by syllables
     let mut grouped = std::collections::HashMap::new();
     for (rhyme_word, rhyme_lang) in rhymes {
-        let syllables = count_syllables_word(&rhyme_word, lang);
+        let syllables = count_syllables_word(&rhyme_word, &rhyme_lang);
         grouped.entry(syllables).or_insert(Vec::new()).push(RhymeWord {
             word: rhyme_word,
             lang: rhyme_lang,
@@ -309,4 +315,45 @@ pub fn find_rhymes_for_word(word: &str, mode: &str, lang: &str) -> Vec<RhymeResu
 
     result.sort_by_key(|r| r.syllables);
     result
+}
+
+fn root(parents: &[usize], mut index: usize) -> usize {
+    while parents[index] != index { index = parents[index]; }
+    index
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn rhyme_groups_and_utf16_offsets() {
+        let result = analyze_rhymes("😀 Haus\nMaus\nraus", "de");
+        assert_eq!(result.matches.len(), 3);
+        assert_eq!(result.matches[0].start, 3);
+        assert_eq!(result.matches[0].end, 7);
+        assert!(result.matches.iter().all(|m| m.group_id == result.matches[0].group_id));
+    }
+    #[test]
+    fn language_filters_and_unknown_words() {
+        dictionary::init_db_local();
+        assert!(dictionary::get_word_attributes("zzqxxunknown", "auto").is_none());
+        assert!(analyze_rhymes("zzqxxunknown zzqxxother", "auto").matches.is_empty());
+        for lang in ["de", "en"] {
+            for group in find_rhymes_for_word(if lang == "de" { "Haus" } else { "night" }, "rein", lang) {
+                assert!(group.words.iter().all(|w| w.lang.to_lowercase() == lang));
+            }
+        }
+        assert!(!find_rhymes_for_word("Haus", "rein", "de").is_empty());
+        assert!(!find_rhymes_for_word("night", "rein", "en").is_empty());
+    }
+    #[test]
+    fn syllables_empty_lines_and_repetition() {
+        dictionary::init_db_local();
+        assert_eq!(calculate_syllables("Haus\n\nMaus", "de"), vec![1, 0, 1]);
+        assert_eq!(calculate_syllables("night light", "en"), vec![2]);
+        assert_eq!(count_syllables_word("", "auto"), 0);
+        assert_eq!(count_syllables_word("banana", "unknown"), 3);
+        assert!(analyze_rhymes("Haus Haus", "de").matches.is_empty());
+        assert!(analyze_rhymes("Haus\n\n\n\n\nMaus", "de").matches.is_empty());
+    }
 }

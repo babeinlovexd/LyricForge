@@ -31,3 +31,7 @@ en_US_dict.txt
 test_files.sh
 tmp_wc.sh
 build_large_db.py
+
+# Automated test reports
+test-results/
+playwright-report/

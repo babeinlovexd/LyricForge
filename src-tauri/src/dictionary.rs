@@ -5,6 +5,7 @@ use tauri::Manager;
 static DB_CONN: OnceLock<Mutex<Connection>> = OnceLock::new();
 
 pub struct WordAttributes {
+    pub lang: String,
     pub ipa: String,
     pub syllables: usize,
     pub rhyme_part: String,
@@ -53,8 +54,8 @@ pub fn init_db(handle: &tauri::AppHandle) {
         // Attach the bundled, read-only dictionary database
         let dict_db_str = resource_path.to_str().unwrap().replace("\\", "/");
         conn.execute(
-            &format!("ATTACH DATABASE '{}' AS bundled_db", dict_db_str),
-            [],
+            "ATTACH DATABASE ?1 AS bundled_db",
+            [&dict_db_str],
         ).expect("Failed to attach bundled database");
 
         Mutex::new(conn)
@@ -64,10 +65,7 @@ pub fn init_db(handle: &tauri::AppHandle) {
 // Fallback init for CLI tests when we don't have an AppHandle
 pub fn init_db_local() {
     DB_CONN.get_or_init(|| {
-        let conn = Connection::open_with_flags(
-            "user_dictionary_test.db",
-            OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_CREATE | OpenFlags::SQLITE_OPEN_NO_MUTEX
-        ).expect("Failed to open user test database");
+        let conn = Connection::open_in_memory().expect("Failed to open test database");
 
         conn.execute(
             "CREATE TABLE IF NOT EXISTS words (
@@ -83,8 +81,8 @@ pub fn init_db_local() {
         ).unwrap_or(0);
 
         conn.execute(
-            "ATTACH DATABASE 'resources/dictionary.db' AS bundled_db",
-            [],
+            "ATTACH DATABASE ?1 AS bundled_db",
+            [concat!(env!("CARGO_MANIFEST_DIR"), "/resources/dictionary.db")],
         ).unwrap_or(0);
 
         Mutex::new(conn)
@@ -96,33 +94,27 @@ pub fn get_word_attributes(word: &str, lang: &str) -> Option<WordAttributes> {
     let lock = DB_CONN.get()?;
     let conn = lock.lock().unwrap();
 
-    let query = if lang.eq_ignore_ascii_case("de") || lang.eq_ignore_ascii_case("en") {
-        "SELECT ipa, syllables, rhyme_part, vowels_clean FROM (
-            SELECT * FROM words
-            UNION ALL
-            SELECT * FROM bundled_db.words
-         ) WHERE word = ?1 AND lang = ?2 LIMIT 1"
-    } else {
-        "SELECT ipa, syllables, rhyme_part, vowels_clean FROM (
-            SELECT * FROM words
-            UNION ALL
-            SELECT * FROM bundled_db.words
-         ) WHERE word = ?1 LIMIT 1"
-    };
+    let language = lang.to_lowercase();
+    if language == "auto" || language == "alle" {
+        let de = get_word_attributes_unlocked(&conn, &word_lower, "de");
+        let en = get_word_attributes_unlocked(&conn, &word_lower, "en");
+        return match (de, en) { (Some(a), None) | (None, Some(a)) => Some(a), _ => None };
+    }
+    get_word_attributes_unlocked(&conn, &word_lower, &language)
+}
 
-    let mut stmt = conn.prepare_cached(query).ok()?;
-
-    let mut rows = if lang.eq_ignore_ascii_case("de") || lang.eq_ignore_ascii_case("en") {
-        stmt.query([&word_lower, &lang.to_lowercase()]).ok()?
-    } else {
-        stmt.query([&word_lower]).ok()?
-    };
-
+fn get_word_attributes_unlocked(conn: &Connection, word: &str, lang: &str) -> Option<WordAttributes> {
+    if lang != "de" && lang != "en" { return None; }
+    let mut stmt = conn.prepare_cached("SELECT ipa, syllables, rhyme_part, vowels_clean FROM (
+        SELECT * FROM words UNION ALL SELECT * FROM bundled_db.words
+    ) WHERE word = ?1 AND lang = ?2 LIMIT 1").ok()?;
+    let mut rows = stmt.query([word, lang]).ok()?;
     if let Some(row) = rows.next().ok().flatten() {
         let syll_int: i32 = row.get(1).unwrap_or(1);
         return Some(WordAttributes {
+            lang: lang.to_string(),
             ipa: row.get(0).unwrap_or_default(),
-            syllables: syll_int as usize,
+            syllables: syll_int.max(0) as usize,
             rhyme_part: row.get(2).unwrap_or_default(),
             vowels_clean: row.get(3).unwrap_or_default(),
         });
@@ -135,6 +127,7 @@ pub fn add_custom_word(new_word: &str, pattern_word: &str, lang: &str) -> Result
     let new_word_lower = new_word.to_lowercase();
     let pattern_word_lower = pattern_word.to_lowercase();
     let lang_lower = lang.to_lowercase();
+    if !["de", "en"].contains(&lang_lower.as_str()) { return Err("Bitte DE oder EN wählen.".into()); }
 
     // 1. Get attributes from pattern word
     let attr = match get_word_attributes(&pattern_word_lower, &lang_lower) {
@@ -168,7 +161,7 @@ pub fn add_custom_word(new_word: &str, pattern_word: &str, lang: &str) -> Result
 }
 
 pub fn get_all_rhymes(word: &str, mode: &str, filter_lang: &str) -> Vec<(String, String)> {
-    let target = match get_word_attributes(word, "auto") {
+    let target = match get_word_attributes(word, filter_lang) {
         Some(t) => t,
         None => return vec![],
     };
@@ -191,7 +184,8 @@ pub fn get_all_rhymes(word: &str, mode: &str, filter_lang: &str) -> Vec<(String,
         _ => return vec![],
     };
 
-    let is_lang_filtered = filter_lang.eq_ignore_ascii_case("de") || filter_lang.eq_ignore_ascii_case("en");
+    let is_lang_filtered = true;
+    if target.rhyme_part.is_empty() || (mode != "rein" && target.vowels_clean.is_empty()) { return vec![]; }
 
     // Note: The inner UNION queries return rows with 'lang'. So we can filter on the outer select!
     let mut query = if is_lang_filtered {
@@ -203,7 +197,7 @@ pub fn get_all_rhymes(word: &str, mode: &str, filter_lang: &str) -> Vec<(String,
     query.push_str(" ORDER BY syllables ASC, word ASC LIMIT 250");
 
     let mut stmt = conn.prepare(&query).unwrap();
-    let lower_lang = filter_lang.to_lowercase();
+    let lower_lang = target.lang;
 
     let mut rows = match mode {
         "rein" => {
@@ -237,4 +231,35 @@ pub fn get_all_rhymes(word: &str, mode: &str, filter_lang: &str) -> Vec<(String,
     }
 
     results
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn homographs_and_cross_language_phonetics_are_not_mixed() {
+        init_db_local();
+        {
+            let conn = DB_CONN.get().unwrap().lock().unwrap();
+            for (word, lang, rhyme) in [
+                ("zzhomograph", "de", "test-de"), ("zzhomograph", "en", "test-en"),
+                ("zzgerman", "de", "test-de"), ("zzenglish", "en", "test-en"),
+                ("zzforeign", "en", "test-de"), ("zzunique", "de", "test-de")
+            ] {
+                conn.execute("INSERT INTO words VALUES (?1, ?2, '', 1, ?3, ?3)", (word, lang, rhyme)).unwrap();
+            }
+        }
+        assert!(get_word_attributes("zzhomograph", "auto").is_none());
+        for mode in ["rein", "vokalklang"] {
+            let de = get_all_rhymes("zzhomograph", mode, "de");
+            assert!(de.iter().any(|(w, _)| w == "zzgerman"));
+            assert!(de.iter().all(|(_, lang)| lang == "DE"));
+            let en = get_all_rhymes("zzhomograph", mode, "en");
+            assert_eq!(en, vec![("zzenglish".into(), "EN".into())]);
+            let auto = get_all_rhymes("zzunique", mode, "auto");
+            assert!(!auto.is_empty());
+            assert!(auto.iter().all(|(_, lang)| lang == "DE"));
+        }
+        assert!(crate::linguistics::analyze_rhymes("zzunique zzforeign", "auto").matches.is_empty());
+    }
 }

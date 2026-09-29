@@ -20,7 +20,9 @@ export const RhymeHighlight = Extension.create({
 
   addProseMirrorPlugins() {
     let timeout: any = null;
-    let currentLang = 'auto'; // We'll need a way to pass this
+    let currentLang = 'auto';
+    let enabled = true;
+    let revision = 0;
     let hoveredGroupId: number | null = null;
     let currentMatches: HighlightMatch[] = [];
 
@@ -35,6 +37,10 @@ export const RhymeHighlight = Extension.create({
             const newMatches: HighlightMatch[] = tr.getMeta('rhymeMatches');
             const newHoverId: number | null = tr.getMeta('hoveredGroupId');
             const toggleMeta = tr.getMeta('showHighlights');
+            const language = tr.getMeta('rhymeLanguage');
+            if (language !== undefined && language !== currentLang) { currentLang = language; revision++; currentMatches = []; }
+            if (tr.docChanged) { revision++; currentMatches = []; }
+            if (toggleMeta !== undefined) enabled = toggleMeta;
 
             let matchesToProcess = currentMatches;
             if (newMatches !== undefined) {
@@ -47,12 +53,12 @@ export const RhymeHighlight = Extension.create({
 
             // Check global toggle (we can pass it via meta)
             // If disabled, just return empty
-            if (toggleMeta === false) {
+            if (!enabled) {
               return DecorationSet.empty;
             }
 
             // Always recalculate decorations if meta changes
-            if (newMatches !== undefined || newHoverId !== undefined || toggleMeta !== undefined || tr.docChanged || tr.selectionSet) {
+            if (newMatches !== undefined || newHoverId !== undefined || toggleMeta !== undefined || language !== undefined || tr.docChanged || tr.selectionSet) {
                // Determine cursor position to auto-hover
                const { from, to } = tr.selection;
                const isCursorHover = from === to;
@@ -128,11 +134,15 @@ export const RhymeHighlight = Extension.create({
           }
         },
         view(_editorView) {
+          let analyzedRevision = -1;
+          let destroyed = false;
           return {
             update(view, prevState) {
               const docChanged = !view.state.doc.eq(prevState.doc);
 
-              if (docChanged) {
+              if (docChanged || analyzedRevision !== revision) {
+                analyzedRevision = revision;
+                const requestRevision = revision;
                 if (timeout) clearTimeout(timeout);
                 timeout = setTimeout(async () => {
                   try {
@@ -162,7 +172,9 @@ export const RhymeHighlight = Extension.create({
                       lang: currentLang
                     });
 
-                    // Map char indices to ProseMirror positions
+                    if (destroyed || revision !== requestRevision) return;
+
+                    // Map UTF-16 indices to ProseMirror positions
                     const mapToPm = (cIdx: number) => {
                       // fallback for bounds
                       if (cIdx >= positions.length) {
@@ -174,7 +186,7 @@ export const RhymeHighlight = Extension.create({
                     const mappedMatches = result.matches.map(m => ({
                       ...m,
                       start: mapToPm(m.start),
-                      end: mapToPm(m.end)
+                      end: mapToPm(m.end - 1) + 1
                     }));
 
                     const tr = view.state.tr.setMeta('rhymeMatches', mappedMatches);
@@ -185,6 +197,7 @@ export const RhymeHighlight = Extension.create({
                 }, 150); // Debounce 150ms
               }
             },
+            destroy() { destroyed = true; revision++; if (timeout) clearTimeout(timeout); },
           };
         },
       }),

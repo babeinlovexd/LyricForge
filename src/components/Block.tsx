@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { BlockData } from '../types';
 import { useAppStore } from '../store';
 import { GripVertical, Copy, Trash2 } from 'lucide-react';
@@ -16,7 +16,7 @@ interface BlockProps {
 }
 
 export const Block: React.FC<BlockProps> = ({ block }) => {
-  const { updateBlock, duplicateBlock, removeBlock, project, setSidebarOpen, setActiveWord, setActiveBlockId, showHighlights } = useAppStore();
+  const { updateBlock, duplicateBlock, removeBlock, setSidebarOpen, setActiveWord, setActiveBlockId, showHighlights } = useAppStore();
   const [syllables, setSyllables] = useState<number[]>([]);
 
   const {
@@ -35,19 +35,6 @@ export const Block: React.FC<BlockProps> = ({ block }) => {
     opacity: isDragging ? 0.8 : 1,
   };
 
-  const calculateSyllables = useCallback(async (text: string) => {
-    try {
-      const lang = block.language === 'auto' ? project.settings.defaultLanguage : block.language;
-      const result = await invoke<number[]>('calculate_syllables', {
-        text: text,
-        lang: lang
-      });
-      setSyllables(result);
-    } catch (e) {
-      console.error(e);
-    }
-  }, [block.language, project.settings.defaultLanguage]);
-
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -65,7 +52,7 @@ export const Block: React.FC<BlockProps> = ({ block }) => {
         spellcheck: 'false',
       },
     },
-    content: block.content.split('\n').map(line => `<p>${line}</p>`).join(''),
+    content: { type: 'doc', content: block.content.split('\n').map(line => ({ type: 'paragraph', content: line ? [{ type: 'text', text: line }] : [] })) },
     onUpdate: ({ editor }) => {
       // Get plain text for storing and syllables
       // We must explicitly join by single newline so that the lines map 1:1 with the syllable counter UI
@@ -78,7 +65,6 @@ export const Block: React.FC<BlockProps> = ({ block }) => {
         }
       });
       updateBlock(block.id, { content: text });
-      calculateSyllables(text);
     },
     onSelectionUpdate: ({ editor }) => {
       const { from, to, empty } = editor.state.selection;
@@ -94,11 +80,25 @@ export const Block: React.FC<BlockProps> = ({ block }) => {
     }
   });
 
-  // Initial calculation
   useEffect(() => {
-    calculateSyllables(block.content);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    let cancelled = false;
+    invoke<number[]>('calculate_syllables', { text: block.content, lang: block.language })
+      .then(result => { if (!cancelled) setSyllables(result); })
+      .catch(console.error);
+    return () => { cancelled = true; };
+  }, [block.content, block.language]);
+
+  useEffect(() => {
+    if (editor) editor.view.dispatch(editor.state.tr.setMeta('rhymeLanguage', block.language));
+  }, [editor, block.language]);
+
+  useEffect(() => {
+    if (editor && editor.getText({ blockSeparator: '\n' }) !== block.content) {
+      editor.commands.setContent({ type: 'doc', content: block.content.split('\n').map(line => ({
+        type: 'paragraph', content: line ? [{ type: 'text', text: line }] : [],
+      })) }, { emitUpdate: false });
+    }
+  }, [editor, block.content]);
 
   // Sync highlights toggle state to ProseMirror
   useEffect(() => {

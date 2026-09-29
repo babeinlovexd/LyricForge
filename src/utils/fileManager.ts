@@ -1,6 +1,7 @@
 import { save, open } from '@tauri-apps/plugin-dialog';
 import { writeTextFile, readTextFile } from '@tauri-apps/plugin-fs';
 import { ProjectData } from '../types';
+import { parseProject, blockTitles } from './project';
 
 export const saveProject = async (project: ProjectData) => {
   try {
@@ -25,10 +26,11 @@ export const openProject = async (): Promise<ProjectData | null> => {
 
     if (selected && typeof selected === 'string') {
       const contents = await readTextFile(selected);
-      return JSON.parse(contents) as ProjectData;
+      return parseProject(JSON.parse(contents));
     }
   } catch (error) {
     console.error('Failed to open project:', error);
+    window.alert(error instanceof Error ? error.message : 'Projekt konnte nicht geöffnet werden.');
   }
   return null;
 };
@@ -42,9 +44,10 @@ export const exportToMarkdown = async (project: ProjectData) => {
     if (filePath) {
       let content = `# ${project.metadata.title}\nArtist: ${project.metadata.artist}\nTempo: ${project.metadata.tempoBpm} BPM\n\n`;
 
+      const titles = blockTitles(project.blocks);
       project.blocks.forEach((block, idx) => {
-        const title = block.type === 'Custom' ? block.customTitle : block.type;
-        content += `## ${title} ${block.type !== 'Custom' && block.type !== 'Scene' && block.type !== 'Skit' && block.type !== 'Interlude' ? idx + 1 : ''}\n`;
+        const title = titles[idx];
+        content += `## ${title}\n`;
         content += `${block.content}\n\n`;
       });
 
@@ -66,9 +69,10 @@ export const exportToText = async (project: ProjectData) => {
     if (filePath) {
       let content = `${project.metadata.title} - ${project.metadata.artist}\n\n`;
 
+      const titles = blockTitles(project.blocks);
       project.blocks.forEach((block, idx) => {
-        const title = block.type === 'Custom' ? block.customTitle : block.type;
-        content += `[${title} ${block.type !== 'Custom' && block.type !== 'Scene' && block.type !== 'Skit' && block.type !== 'Interlude' ? idx + 1 : ''}]\n`;
+        const title = titles[idx];
+        content += `[${title}]\n`;
         content += `${block.content}\n\n`;
       });
 
