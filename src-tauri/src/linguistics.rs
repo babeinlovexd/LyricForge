@@ -152,7 +152,7 @@ fn vowel_match(v1: &str, v2: &str) -> Option<(&'static str, u8)> {
 pub fn analyze_rhymes(text: &str, lang: &str) -> RhymeAnalysisResult {
     dictionary::init_db_local(); // Fallback for tests if needed, but normally init_db is called in setup
 
-    let re = Regex::new(r"[\p{L}]+").unwrap();
+    let re = Regex::new(r"[\p{L}]+(?:['’][\p{L}]+)*").unwrap();
 
     let mut word_matches = Vec::new();
     for mat in re.find_iter(text) {
@@ -289,7 +289,7 @@ pub fn analyze_rhymes(text: &str, lang: &str) -> RhymeAnalysisResult {
                         // 2: Multi-syllable vocal harmony / Vokalklang (purple)
                         // 1: Assonance (yellow)
                         if is_pure && (!is_stop_word || is_end_rhyme) {
-                            if is_end_rhyme_i || is_end_rhyme_j {
+                            if is_end_rhyme {
                                 match_type_found = Some("moss-green".to_string());
                                 priority = 4;
                             } else {
@@ -471,6 +471,52 @@ mod tests {
         assert_eq!((mixed[0].min, mixed[0].max), (6, 6));
         assert_eq!((mixed[1].min, mixed[1].max), (3, 3));
         assert_eq!(calculate_syllables("", "auto")[0], SyllableCount { min: 0, max: 0, estimated: false });
+    }
+
+    #[test]
+    fn internal_vs_end_rhyme_classification() {
+        dictionary::init_db_local();
+        {
+            let conn = dictionary::DB_CONN.get().unwrap().lock().unwrap();
+            for (word, lang, rhyme, vowels) in [
+                ("zzei1", "de", "aus", "au"),
+                ("zzei2", "de", "aus", "au"),
+                ("zzei3", "de", "aus", "au"),
+            ] {
+                conn.execute("INSERT OR REPLACE INTO words VALUES (?1, ?2, '', 1, ?3, ?4)", (word, lang, rhyme, vowels)).unwrap();
+            }
+        }
+
+        // Line 1 ends with zzei1. Line 2 has zzei2 (internal) and zzei3 (end).
+        let result = analyze_rhymes("zzei1\nzzei2 and zzei3", "de");
+        assert_eq!(result.matches.len(), 3);
+        let m1 = result.matches.iter().find(|m| m.word == "zzei1").unwrap();
+        let m2 = result.matches.iter().find(|m| m.word == "zzei2").unwrap();
+        let m3 = result.matches.iter().find(|m| m.word == "zzei3").unwrap();
+
+        // Rhyme between end-word zzei1 and end-word zzei3 is pure end rhyme (moss-green)
+        // Rhyme involving internal-word zzei2 is pure internal rhyme (light-green)
+        assert_eq!(m1.match_type, "moss-green");
+        assert_eq!(m3.match_type, "moss-green");
+        assert_eq!(m2.match_type, "light-green");
+    }
+
+    #[test]
+    fn apostrophe_words_tokenization() {
+        dictionary::init_db_local();
+        {
+            let conn = dictionary::DB_CONN.get().unwrap().lock().unwrap();
+            for (word, lang, rhyme, vowels) in [
+                ("don't", "en", "ont", "o"),
+                ("won't", "en", "ont", "o"),
+            ] {
+                conn.execute("INSERT OR REPLACE INTO words VALUES (?1, ?2, '', 1, ?3, ?4)", (word, lang, rhyme, vowels)).unwrap();
+            }
+        }
+        let result = analyze_rhymes("don't\nwon't", "en");
+        assert_eq!(result.matches.len(), 2);
+        assert_eq!(result.matches[0].word, "don't");
+        assert_eq!(result.matches[1].word, "won't");
     }
 
 }
