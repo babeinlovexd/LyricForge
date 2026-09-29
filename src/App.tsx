@@ -98,7 +98,7 @@ function App() {
       </header>
 
       <div className="flex-1 flex flex-row overflow-hidden min-h-0 relative">
-        <main className="flex-1 overflow-y-auto p-4 min-h-0 w-full max-w-4xl mx-auto">
+        <main className="flex-1 min-w-0 overflow-y-auto p-4 min-h-0 w-full max-w-4xl mx-auto">
           <div className="mb-6 flex gap-4">
             <input
               type="text"

@@ -17,7 +17,7 @@ interface BlockProps {
 
 export const Block: React.FC<BlockProps> = ({ block }) => {
   const { updateBlock, duplicateBlock, removeBlock, setSidebarOpen, setActiveWord, setActiveBlockId, showHighlights } = useAppStore();
-  const [syllables, setSyllables] = useState<number[]>([]);
+  const [syllables, setSyllables] = useState<{ min: number; max: number; estimated: boolean }[]>([]);
 
   const {
     attributes,
@@ -82,7 +82,7 @@ export const Block: React.FC<BlockProps> = ({ block }) => {
 
   useEffect(() => {
     let cancelled = false;
-    invoke<number[]>('calculate_syllables', { text: block.content, lang: 'auto' })
+    invoke<{ min: number; max: number; estimated: boolean }[]>('calculate_syllables', { text: block.content, lang: 'auto' })
       .then(result => { if (!cancelled) setSyllables(result); })
       .catch(console.error);
     return () => { cancelled = true; };
@@ -182,10 +182,11 @@ export const Block: React.FC<BlockProps> = ({ block }) => {
           {/* Syllables Column */}
           <div className="w-12 border-l border-[#333] flex flex-col items-center pt-4 text-xs font-mono text-gray-500 bg-[#1a1a1a] select-none">
             {block.content.split('\n').map((line, i) => {
-              const count = syllables[i] || 0;
+              const value = syllables[i];
+              const count = value ? (value.min === value.max ? String(value.min) : `${value.min}–${value.max}`) : '…';
               return (
                 <div key={i} className="h-[1.5em] text-[14px] flex items-center justify-center w-full" style={{ lineHeight: '1.5em' }}>
-                  {line.trim() !== '' ? <span className="bg-[#2a2a2a] px-1 rounded hover:bg-gray-600 cursor-pointer" title="Silben">[{count}]</span> : ''}
+                  {line.trim() !== '' ? <span className="bg-[#2a2a2a] px-1 rounded hover:bg-gray-600 cursor-pointer" title={value && value.min !== value.max ? "Mehrdeutige Aussprache: mögliche Silbenzahl" : value?.estimated ? "Silbenzahl aus Kontext oder Näherung" : "Silben"}>[{count}]</span> : ''}
                 </div>
               );
             })}

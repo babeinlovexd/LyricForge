@@ -9,6 +9,7 @@ export interface HighlightMatch {
   end: number;
   match_type: string;
   group_id: number;
+  partners: { start: number; match_type: string }[];
 }
 
 export interface RhymeAnalysisResult {
@@ -23,7 +24,7 @@ export const RhymeHighlight = Extension.create({
     let currentLang = 'auto';
     let enabled = true;
     let revision = 0;
-    let hoveredGroupId: number | null = null;
+    let hoveredWordStart: number | null = null;
     let currentMatches: HighlightMatch[] = [];
 
     return [
@@ -35,11 +36,11 @@ export const RhymeHighlight = Extension.create({
           },
           apply(tr, oldState) {
             const newMatches: HighlightMatch[] = tr.getMeta('rhymeMatches');
-            const newHoverId: number | null = tr.getMeta('hoveredGroupId');
+            const newHoverId: number | null = tr.getMeta('hoveredWordStart');
             const toggleMeta = tr.getMeta('showHighlights');
             const language = tr.getMeta('rhymeLanguage');
             if (language !== undefined && language !== currentLang) { currentLang = language; revision++; currentMatches = []; }
-            if (tr.docChanged) { revision++; currentMatches = []; }
+            if (tr.docChanged) { revision++; currentMatches = []; hoveredWordStart = null; }
             if (toggleMeta !== undefined) enabled = toggleMeta;
 
             let matchesToProcess = currentMatches;
@@ -48,7 +49,7 @@ export const RhymeHighlight = Extension.create({
               currentMatches = newMatches;
             }
             if (newHoverId !== undefined) {
-              hoveredGroupId = newHoverId;
+              hoveredWordStart = newHoverId;
             }
 
             // Check global toggle (we can pass it via meta)
@@ -59,30 +60,21 @@ export const RhymeHighlight = Extension.create({
 
             // Always recalculate decorations if meta changes
             if (newMatches !== undefined || newHoverId !== undefined || toggleMeta !== undefined || language !== undefined || tr.docChanged || tr.selectionSet) {
-               // Determine cursor position to auto-hover
-               const { from, to } = tr.selection;
-               const isCursorHover = from === to;
-               let activeGroupIds = new Set<number>();
-
-               if (hoveredGroupId !== null) {
-                 activeGroupIds.add(hoveredGroupId);
-               }
-
-               if (isCursorHover) {
-                 matchesToProcess.forEach(m => {
-                   if (from >= m.start && from <= m.end) {
-                     activeGroupIds.add(m.group_id);
-                   }
-                 });
+               // Only the word under the pointer and its direct partners are active.
+               const hovered = matchesToProcess.find(m => m.start === hoveredWordStart);
+               const active = new Map<number, string>();
+               if (hovered) {
+                 active.set(hovered.start, hovered.match_type);
+                 for (const partner of hovered.partners) active.set(partner.start, partner.match_type);
                }
 
                const decorations: Decoration[] = [];
                matchesToProcess.forEach(match => {
-                 const isActive = activeGroupIds.has(match.group_id);
+                 const activeType = active.get(match.start);
 
                  let className = `hl-${match.match_type}`;
-                 if (isActive) {
-                    className += ` hover-active hover-active-${match.match_type}`;
+                 if (activeType) {
+                    className += ` hover-active hover-active-${activeType}`;
                  }
 
                  if (match.start >= 0 && match.end <= tr.doc.content.size) {
@@ -90,7 +82,8 @@ export const RhymeHighlight = Extension.create({
                      decorations.push(
                        Decoration.inline(match.start, match.end, {
                          class: className,
-                         'data-group-id': match.group_id.toString()
+                         'data-group-id': match.group_id.toString(),
+                         'data-word-start': match.start.toString()
                        })
                      );
                    } catch (e) {
@@ -110,23 +103,23 @@ export const RhymeHighlight = Extension.create({
           },
           handleDOMEvents: {
             mouseover: (view, event) => {
-              const target = event.target as HTMLElement;
-              const groupIdStr = target.getAttribute('data-group-id');
+              const target = (event.target as HTMLElement).closest('[data-word-start]');
+              const groupIdStr = target?.getAttribute('data-word-start');
               if (groupIdStr) {
                   const groupId = parseInt(groupIdStr, 10);
-                  if (hoveredGroupId !== groupId) {
-                      view.dispatch(view.state.tr.setMeta('hoveredGroupId', groupId));
+                  if (hoveredWordStart !== groupId) {
+                      view.dispatch(view.state.tr.setMeta('hoveredWordStart', groupId));
                   }
                   return false;
               }
-              if (hoveredGroupId !== null) {
-                 view.dispatch(view.state.tr.setMeta('hoveredGroupId', null));
+              if (hoveredWordStart !== null) {
+                 view.dispatch(view.state.tr.setMeta('hoveredWordStart', null));
               }
               return false;
             },
             mouseleave: (view, _event) => {
-               if (hoveredGroupId !== null) {
-                  view.dispatch(view.state.tr.setMeta('hoveredGroupId', null));
+               if (hoveredWordStart !== null) {
+                  view.dispatch(view.state.tr.setMeta('hoveredWordStart', null));
                }
                return false;
             }
@@ -185,7 +178,8 @@ export const RhymeHighlight = Extension.create({
                     const mappedMatches = result.matches.map(m => ({
                       ...m,
                       start: mapToPm(m.start),
-                      end: mapToPm(m.end - 1) + 1
+                      end: mapToPm(m.end - 1) + 1,
+                      partners: m.partners.map(p => ({ ...p, start: mapToPm(p.start) }))
                     }));
 
                     const tr = view.state.tr.setMeta('rhymeMatches', mappedMatches);

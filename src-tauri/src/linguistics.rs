@@ -15,6 +15,13 @@ pub struct HighlightMatch {
     pub end: usize,
     pub match_type: String, // "moss-green", "light-green", "yellow", "purple"
     pub group_id: usize,
+    pub partners: Vec<RhymePartner>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct RhymePartner {
+    pub start: usize,
+    pub match_type: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -66,22 +73,79 @@ pub fn count_syllables_word(word: &str, lang: &str) -> usize {
     }
 }
 
-#[tauri::command]
-pub fn calculate_syllables(text: &str, lang: &str) -> Vec<usize> {
-    let mut results = Vec::new();
-    let lines = text.split('\n');
-    let re = Regex::new(r"[\p{L}]+").unwrap();
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
+pub struct SyllableCount {
+    pub min: usize,
+    pub max: usize,
+    pub estimated: bool,
+}
 
-    for line in lines {
-        let mut line_syllables = 0;
-        for caps in re.captures_iter(line) {
-            let word = caps.get(0).unwrap().as_str();
-            line_syllables += count_syllables_word(word, lang);
-        }
-        results.push(line_syllables);
+// Strong local clues decide between known pronunciations, never the dictionary order.
+fn language_clue(word: &str) -> (usize, usize) {
+    match word.to_lowercase().as_str() {
+        "ich" | "du" | "der" | "das" | "und" | "ist" | "nicht" | "mein" | "meine" | "deine" | "wir" | "mit" | "für" => (3, 0),
+        "the" | "this" | "that" | "these" | "those" | "and" | "is" | "are" | "you" | "your" | "my" | "with" | "for" => (0, 3),
+        _ => (0, 0),
     }
+}
 
-    results
+#[tauri::command]
+pub fn calculate_syllables(text: &str, lang: &str) -> Vec<SyllableCount> {
+    dictionary::init_db_local();
+    let re = Regex::new(r"[\p{L}]+(?:['’][\p{L}]+)*").unwrap();
+    let language = lang.to_lowercase();
+    text.split('\n').map(|line| {
+        let words: Vec<_> = re.find_iter(line).map(|m| m.as_str()).collect();
+        let attrs: Vec<_> = words.iter().map(|w| (
+            dictionary::get_word_attributes(w, "de"), dictionary::get_word_attributes(w, "en")
+        )).collect();
+        let clues: Vec<_> = words.iter().zip(&attrs).map(|(word, (de, en))| {
+            let clue = language_clue(word);
+            if clue != (0, 0) { clue } else {
+                match (de, en) { (Some(_), None) => (1,0), (None, Some(_)) => (0,1), _ => (0,0) }
+            }
+        }).collect();
+        let mut result = SyllableCount { min: 0, max: 0, estimated: false };
+        for (i, word) in words.iter().enumerate() {
+            let (de, en) = &attrs[i];
+            let available = |a: &Option<dictionary::WordAttributes>| a.as_ref().map(|a| a.syllables).filter(|n| *n > 0);
+            let (de, en) = (available(de), available(en));
+            let mut counts = match language.as_str() {
+                "de" => de.into_iter().collect::<Vec<_>>(),
+                "en" => en.into_iter().collect::<Vec<_>>(),
+                _ => match (de, en) {
+                    (Some(d), Some(e)) if d != e => {
+                        let (mut dv, mut ev) = (0, 0);
+                        for (j, (d, e)) in clues.iter().enumerate() {
+                            if i != j && i.abs_diff(j) <= 3 { dv += d; ev += e; }
+                        }
+                        if dv > ev { result.estimated = true; vec![d] }
+                        else if ev > dv { result.estimated = true; vec![e] }
+                        else { vec![d, e] }
+                    },
+                    _ => de.into_iter().chain(en).collect(),
+                },
+            };
+            if counts.is_empty() {
+                counts.push(count_syllables_word(word, &language));
+                result.estimated = true;
+            }
+            result.min += counts.iter().min().unwrap();
+            result.max += counts.iter().max().unwrap();
+        }
+        result
+    }).collect()
+}
+
+// Complete nuclei (including diphthongs and length) are delimited by the importer.
+// A missing delimiter in legacy data is treated conservatively as one whole key.
+fn vowel_match(v1: &str, v2: &str) -> Option<(&'static str, u8)> {
+    let a: Vec<_> = v1.split('|').filter(|s| !s.is_empty()).collect();
+    let b: Vec<_> = v2.split('|').filter(|s| !s.is_empty()).collect();
+    if a.is_empty() || b.is_empty() { return None; }
+    if a == b && a.len() > 1 { Some(("purple", 2)) }
+    else if a[0] == b[0] { Some(("yellow", 1)) }
+    else { None }
 }
 
 #[tauri::command]
@@ -144,6 +208,7 @@ pub fn analyze_rhymes(text: &str, lang: &str) -> RhymeAnalysisResult {
     }
 
     let mut all_matches: Vec<HighlightMatch> = Vec::new();
+    let mut direct: Vec<std::collections::BTreeMap<usize, (u8, String)>> = vec![std::collections::BTreeMap::new(); word_matches.len()];
     let mut parents: Vec<usize> = (0..word_matches.len()).collect();
 
     // Fetch both DE and EN attributes for multi-language evaluation
@@ -231,27 +296,25 @@ pub fn analyze_rhymes(text: &str, lang: &str) -> RhymeAnalysisResult {
                                 match_type_found = Some("light-green".to_string());
                                 priority = 3;
                             }
-                        } else if !is_pure && !v1.is_empty() && v1 == v2 && !is_stop_word {
-                            if attr1.syllables > 1 || attr2.syllables > 1 {
-                                match_type_found = Some("purple".to_string());
-                                priority = 2;
-                            } else {
-                                match_type_found = Some("yellow".to_string());
-                                priority = 1;
-                            }
-                        } else if !is_pure && !v1.is_empty() && !v2.is_empty() && !is_stop_word {
-                            let last1 = v1.chars().last();
-                            let last2 = v2.chars().last();
-                            if last1.is_some() && last1 == last2 {
-                                match_type_found = Some("yellow".to_string());
-                                priority = 1;
+                        } else if !is_pure && !is_stop_word {
+                            if let Some((kind, strength)) = vowel_match(v1, v2) {
+                                match_type_found = Some(kind.to_string());
+                                priority = strength;
                             }
                         }
 
                         if let Some(mt) = match_type_found {
-                            let root_i = root(&parents, i);
-                            let root_j = root(&parents, j);
-                            parents[root_j] = root_i;
+                            // Only exact rhymes form stable groups. Hover follows direct edges.
+                            if is_pure {
+                                let root_i = root(&parents, i);
+                                let root_j = root(&parents, j);
+                                parents[root_j] = root_i;
+                            }
+                            for (from, to) in [(i, j), (j, i)] {
+                                if direct[from].get(&to).map(|(p, _)| *p).unwrap_or(0) < priority {
+                                    direct[from].insert(to, (priority, mt.clone()));
+                                }
+                            }
 
                             let match1 = HighlightMatch {
                                 word: w1.to_string(),
@@ -259,6 +322,7 @@ pub fn analyze_rhymes(text: &str, lang: &str) -> RhymeAnalysisResult {
                                 end: end1,
                                 match_type: mt.clone(),
                                 group_id: i,
+                                partners: Vec::new(),
                             };
                             let match2 = HighlightMatch {
                                 word: w2.to_string(),
@@ -266,6 +330,7 @@ pub fn analyze_rhymes(text: &str, lang: &str) -> RhymeAnalysisResult {
                                 end: end2,
                                 match_type: mt.clone(),
                                 group_id: j,
+                                partners: Vec::new(),
                             };
 
                             let current_best_1 = best_matches.get(&start1).map(|(p, _)| *p).unwrap_or(0);
@@ -285,6 +350,9 @@ pub fn analyze_rhymes(text: &str, lang: &str) -> RhymeAnalysisResult {
     }
 
     for (_, (_, mut m)) in best_matches {
+        m.partners = direct[m.group_id].iter().map(|(other, (_, kind))| RhymePartner {
+            start: byte_to_char[&word_matches[*other].start()], match_type: kind.clone(),
+        }).collect();
         m.group_id = root(&parents, m.group_id) + 1;
         all_matches.push(m);
     }
@@ -323,10 +391,17 @@ pub fn find_rhymes_for_word(word: &str, mode: &str, lang: &str) -> Vec<RhymeResu
 
     let mut result = Vec::new();
     for (syllables, words) in grouped {
-        // limit to 50 results per syllable group to prevent UI freeze
-        let mut limited_words = words;
-        if limited_words.len() > 50 {
-            limited_words.truncate(50);
+        // Alternate languages so the DE query cannot crowd out EN in "Alle".
+        let mut languages: std::collections::BTreeMap<String, std::collections::VecDeque<RhymeWord>> = std::collections::BTreeMap::new();
+        for word in words { languages.entry(word.lang.clone()).or_default().push_back(word); }
+        let mut limited_words = Vec::new();
+        while limited_words.len() < 50 {
+            let before = limited_words.len();
+            for queue in languages.values_mut() {
+                if limited_words.len() == 50 { break; }
+                if let Some(word) = queue.pop_front() { limited_words.push(word); }
+            }
+            if limited_words.len() == before { break; }
         }
         result.push(RhymeResultGrouped {
             syllables,
@@ -370,11 +445,32 @@ mod tests {
     #[test]
     fn syllables_empty_lines_and_repetition() {
         dictionary::init_db_local();
-        assert_eq!(calculate_syllables("Haus\n\nMaus", "de"), vec![1, 0, 1]);
-        assert_eq!(calculate_syllables("night light", "en"), vec![2]);
+        assert_eq!(calculate_syllables("Haus\n\nMaus", "de").iter().map(|n| n.min).collect::<Vec<_>>(), vec![1, 0, 1]);
+        assert_eq!(calculate_syllables("night light", "en")[0].min, 2);
         assert_eq!(count_syllables_word("", "auto"), 0);
         assert_eq!(count_syllables_word("banana", "unknown"), 3);
         assert!(analyze_rhymes("Haus Haus", "de").matches.is_empty());
         assert!(analyze_rhymes("Haus\n\n\n\n\nMaus", "de").matches.is_empty());
     }
+    #[test]
+    fn compare_complete_stressed_nuclei() {
+        assert_eq!(vowel_match("uː", "oː"), None);
+        assert_eq!(vowel_match("aɪ", "ɔɪ"), None);
+        assert_eq!(vowel_match("aː|ə", "oː|ə"), None);
+        assert_eq!(vowel_match("aː|ə", "aː|ɪ"), Some(("yellow", 1)));
+        assert_eq!(vowel_match("aː|ə", "aː|ə"), Some(("purple", 2)));
+        assert!(analyze_rhymes("gut rot", "de").matches.is_empty());
+    }
+
+    #[test]
+    fn bilingual_syllables_use_context_or_show_uncertainty() {
+        assert_eq!(calculate_syllables("mine", "auto")[0], SyllableCount { min: 1, max: 2, estimated: false });
+        let english = calculate_syllables("This is mine", "auto");
+        assert_eq!((english[0].min, english[0].max), (3, 3));
+        let mixed = calculate_syllables("Das ist meine Mine\nThis is mine", "auto");
+        assert_eq!((mixed[0].min, mixed[0].max), (6, 6));
+        assert_eq!((mixed[1].min, mixed[1].max), (3, 3));
+        assert_eq!(calculate_syllables("", "auto")[0], SyllableCount { min: 0, max: 0, estimated: false });
+    }
+
 }

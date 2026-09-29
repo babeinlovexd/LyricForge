@@ -26,7 +26,6 @@ export const Sidebar: React.FC = () => {
   const [teachLang, setTeachLang] = useState('de');
   const [teachMessage, setTeachMessage] = useState('');
 
-  const blockLanguage = project.blocks.find(b => b.id === activeBlockId)?.language ?? 'auto';
   useEffect(() => {
     let cancelled = false;
     setResults([]);
@@ -35,12 +34,12 @@ export const Sidebar: React.FC = () => {
       setLoading(true);
       invoke<RhymeResultGrouped[]>('find_rhymes_for_word', {
         word: activeWord, mode: activeTab.toLowerCase(),
-        lang: langFilter === 'Alle' ? blockLanguage : langFilter.toLowerCase(),
+        lang: langFilter === 'Alle' ? 'auto' : langFilter.toLowerCase(),
       }).then(response => { if (!cancelled) setResults(response); })
         .catch(console.error).finally(() => { if (!cancelled) setLoading(false); });
     }
     return () => { cancelled = true; };
-  }, [activeWord, activeTab, langFilter, isSidebarOpen, blockLanguage]);
+  }, [activeWord, activeTab, langFilter, isSidebarOpen]);
 
   const handleWordClick = (word: string) => {
     if (activeBlockId) {

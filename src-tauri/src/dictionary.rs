@@ -98,7 +98,7 @@ pub fn get_word_attributes(word: &str, lang: &str) -> Option<WordAttributes> {
     if language == "auto" || language == "alle" || language.is_empty() {
         let de = get_word_attributes_unlocked(&conn, &word_lower, "de");
         let en = get_word_attributes_unlocked(&conn, &word_lower, "en");
-        return de.or(en);
+        return match (de, en) { (Some(a), None) | (None, Some(a)) => Some(a), _ => None };
     }
     get_word_attributes_unlocked(&conn, &word_lower, &language)
 }
@@ -200,7 +200,7 @@ pub fn get_all_rhymes(word: &str, mode: &str, filter_lang: &str) -> Vec<(String,
             Err(_) => continue,
         };
 
-        let mut rows = match mode {
+        let rows = match mode {
             "rein" => stmt.query((&target.rhyme_part, &word_lower, lang_code)),
             "assonanz" => stmt.query((&target_vowels_normalized, &target.rhyme_part, &word_lower, lang_code)),
             "vokalklang" => stmt.query((&target_vowels_normalized, &word_lower, lang_code)),
@@ -252,4 +252,28 @@ mod tests {
         }
         assert!(crate::linguistics::analyze_rhymes("zzunique zzforeign", "auto").matches.is_empty());
     }
+    #[test]
+    fn direct_partners_do_not_follow_bilingual_bridges() {
+        init_db_local();
+        {
+            let conn = DB_CONN.get().unwrap().lock().unwrap();
+            for (word, lang, rhyme, vowels) in [
+                ("zzalpha", "de", "at", "a"), ("zzbravo", "de", "ak", "a"),
+                ("zzbravo", "en", "et", "e"), ("zzcharlie", "en", "ek", "e")
+            ] {
+                conn.execute("INSERT INTO words VALUES (?1, ?2, '', 1, ?3, ?4)", (word, lang, rhyme, vowels)).unwrap();
+            }
+        }
+        let result = crate::linguistics::analyze_rhymes("zzalpha zzbravo zzcharlie", "auto");
+        assert_eq!(result.matches.len(), 3);
+        let alpha = &result.matches[0];
+        let bravo = &result.matches[1];
+        let charlie = &result.matches[2];
+        assert_eq!(alpha.partners.len(), 1);
+        assert_eq!(alpha.partners[0].start, bravo.start);
+        assert_eq!(bravo.partners.len(), 2);
+        assert_eq!(charlie.partners.len(), 1);
+        assert!(alpha.partners.iter().all(|p| p.start != charlie.start));
+    }
+
 }
