@@ -83,7 +83,7 @@ export const Sidebar: React.FC = () => {
   if (!isSidebarOpen) return null;
 
   return (
-    <div className="w-80 border-l border-[#333] bg-[#1a1a1a] flex flex-col fixed right-0 top-0 h-screen z-50 shadow-[-5px_0_15px_rgba(0,0,0,0.5)]">
+    <div className="w-80 border-l border-[#333] bg-[#1a1a1a] flex flex-col h-full shrink-0 z-20 shadow-[-5px_0_15px_rgba(0,0,0,0.5)]">
       <div className="p-4 border-b border-[#333] flex justify-between items-center bg-[#222]">
         <h2 className="font-bold text-white">Reim-Helfer</h2>
         <button onClick={() => setSidebarOpen(false)} className="text-gray-400 hover:text-white">
