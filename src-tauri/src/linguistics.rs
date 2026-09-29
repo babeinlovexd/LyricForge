@@ -191,11 +191,11 @@ pub fn analyze_rhymes(text: &str, lang: &str) -> RhymeAnalysisResult {
                         let v1_count = attr1.syllables;
                         let v2_count = attr2.syllables;
 
-                        // Assonance is true if the clean vowels string starts with the same primary vowel core.
-                        let is_asso = !is_pure && v1_count > 0 && !v1.is_empty() && v1.chars().next() == v2.chars().next();
+                        // Assonance is true if the clean vowels string matches, but the trailing consonants (rhyme part) differ.
+                        let is_asso = !is_pure && v1_count > 0 && !v1.is_empty() && v1 == v2;
 
                         let mut is_vocal = false;
-                        if v1_count >= 2 && v1 == v2 {
+                        if !v1.is_empty() && v1 == v2 {
                             is_vocal = true;
                         }
 

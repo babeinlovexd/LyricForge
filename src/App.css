@@ -49,19 +49,24 @@ body {
   text-underline-offset: 3px;
 }
 
-/* Assonanzen & Vokalklänge standardmäßig unsichtbar */
-.hl-yellow, .hl-purple {
-  text-decoration: none;
+/* Assonanzen & Vokalklänge standardmäßig sichtbar */
+.hl-yellow {
+  text-decoration: underline 2px dotted #facc15;
+  text-underline-offset: 3px;
+}
+.hl-purple {
+  background-color: rgba(168, 85, 247, 0.2);
+  border-radius: 2px;
 }
 
-/* Nur aktiv bei Hover über die zugehörige Gruppe */
+/* Nur aktiv bei Hover über die zugehörige Gruppe (Optional Highlight Booster) */
 .hover-active-yellow {
   text-decoration: underline 2px dotted #facc15 !important;
   text-underline-offset: 3px;
+  background-color: rgba(250, 204, 21, 0.2);
 }
 .hover-active-purple {
-  text-decoration: underline 2px dashed #a855f7 !important;
-  text-underline-offset: 3px;
+  background-color: rgba(168, 85, 247, 0.4) !important;
 }
 
 /* Base styles for active words */

@@ -28,26 +28,17 @@ export const Sidebar: React.FC = () => {
 
   useEffect(() => {
     if (activeWord && isSidebarOpen && activeTab !== 'Lernen') {
-      fetchRhymes(activeWord, activeTab);
+      fetchRhymes(activeWord, activeTab, langFilter);
     }
-  }, [activeWord, activeTab, isSidebarOpen]);
+  }, [activeWord, activeTab, langFilter, isSidebarOpen]);
 
-  const fetchRhymes = async (word: string, mode: string) => {
+  const fetchRhymes = async (word: string, mode: string, filter: string) => {
     setLoading(true);
     try {
-      // Pass the language of the current active block or default
-      let lang = project.settings.defaultLanguage;
-      if (activeBlockId) {
-        const block = project.blocks.find(b => b.id === activeBlockId);
-        if (block && block.language !== 'auto') {
-          lang = block.language;
-        }
-      }
-
       const response = await invoke<RhymeResultGrouped[]>('find_rhymes_for_word', {
         word,
         mode: mode.toLowerCase(),
-        lang,
+        lang: filter.toLowerCase(),
       });
       setResults(response);
     } catch (e) {
@@ -201,8 +192,7 @@ export const Sidebar: React.FC = () => {
           <div className="text-center text-gray-500 py-8">Keine Ergebnisse gefunden.</div>
         ) : (
           results.map((group) => {
-            const filteredWords = group.words.filter(w => langFilter === 'Alle' || w.lang === langFilter);
-            if (filteredWords.length === 0) return null;
+            if (group.words.length === 0) return null;
 
             return (
               <div key={group.syllables} className="mb-4">
@@ -210,7 +200,7 @@ export const Sidebar: React.FC = () => {
                   <span className="mr-2 text-xs">▼</span> {group.syllables} {group.syllables === 1 ? 'Silbe' : 'Silben'}
                 </h3>
                 <div className="flex flex-wrap gap-2">
-                  {filteredWords.map((rw, idx) => (
+                  {group.words.map((rw, idx) => (
                     <button
                       key={idx}
                       onClick={() => handleWordClick(rw.word)}

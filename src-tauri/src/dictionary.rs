@@ -27,17 +27,35 @@ pub fn init_db(handle: &tauri::AppHandle) {
             std::fs::create_dir_all(&app_data_dir).expect("Failed to create app data dir");
         }
 
-        let user_db_path = app_data_dir.join("dictionary.db");
+        let user_db_path = app_data_dir.join("user_dictionary.db");
 
-        if !user_db_path.exists() {
-            // Copy bundled db to app_data_dir
-            std::fs::copy(&resource_path, &user_db_path).expect("Failed to copy dictionary.db to app data dir");
-        }
-
+        // Main connection must be READ/WRITE so we can create tables and insert into user_db.
+        // We will open the user_db as the main connection and ATTACH the read-only dictionary!
         let conn = Connection::open_with_flags(
-            user_db_path,
-            OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_NO_MUTEX
-        ).expect("Failed to open dictionary database");
+            &user_db_path,
+            OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_CREATE | OpenFlags::SQLITE_OPEN_NO_MUTEX
+        ).expect("Failed to open user database");
+
+        // Create table in user_db (which is main here)
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS words (
+                word TEXT,
+                lang TEXT,
+                ipa TEXT,
+                syllables INTEGER,
+                rhyme_part TEXT,
+                vowels_clean TEXT,
+                PRIMARY KEY (word, lang)
+            )",
+            []
+        ).expect("Failed to create user words table");
+
+        // Attach the bundled, read-only dictionary database
+        let dict_db_str = resource_path.to_str().unwrap().replace("\\", "/");
+        conn.execute(
+            &format!("ATTACH DATABASE '{}' AS bundled_db", dict_db_str),
+            [],
+        ).expect("Failed to attach bundled database");
 
         Mutex::new(conn)
     });
@@ -47,9 +65,28 @@ pub fn init_db(handle: &tauri::AppHandle) {
 pub fn init_db_local() {
     DB_CONN.get_or_init(|| {
         let conn = Connection::open_with_flags(
-            "resources/dictionary.db",
-            OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_NO_MUTEX
-        ).expect("Failed to open dictionary database locally");
+            "user_dictionary_test.db",
+            OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_CREATE | OpenFlags::SQLITE_OPEN_NO_MUTEX
+        ).expect("Failed to open user test database");
+
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS words (
+                word TEXT,
+                lang TEXT,
+                ipa TEXT,
+                syllables INTEGER,
+                rhyme_part TEXT,
+                vowels_clean TEXT,
+                PRIMARY KEY (word, lang)
+            )",
+            []
+        ).unwrap_or(0);
+
+        conn.execute(
+            "ATTACH DATABASE 'resources/dictionary.db' AS bundled_db",
+            [],
+        ).unwrap_or(0);
+
         Mutex::new(conn)
     });
 }
@@ -60,9 +97,17 @@ pub fn get_word_attributes(word: &str, lang: &str) -> Option<WordAttributes> {
     let conn = lock.lock().unwrap();
 
     let query = if lang.eq_ignore_ascii_case("de") || lang.eq_ignore_ascii_case("en") {
-        "SELECT ipa, syllables, rhyme_part, vowels_clean FROM words WHERE word = ?1 AND lang = ?2 LIMIT 1"
+        "SELECT ipa, syllables, rhyme_part, vowels_clean FROM (
+            SELECT * FROM words
+            UNION ALL
+            SELECT * FROM bundled_db.words
+         ) WHERE word = ?1 AND lang = ?2 LIMIT 1"
     } else {
-        "SELECT ipa, syllables, rhyme_part, vowels_clean FROM words WHERE word = ?1 LIMIT 1"
+        "SELECT ipa, syllables, rhyme_part, vowels_clean FROM (
+            SELECT * FROM words
+            UNION ALL
+            SELECT * FROM bundled_db.words
+         ) WHERE word = ?1 LIMIT 1"
     };
 
     let mut stmt = conn.prepare_cached(query).ok()?;
@@ -140,14 +185,15 @@ pub fn get_all_rhymes(word: &str, mode: &str, filter_lang: &str) -> Vec<(String,
     let target_vowels_normalized = target.vowels_clean.clone();
 
     let query_base = match mode {
-        "rein" => "SELECT word, lang FROM words WHERE rhyme_part = ?1 AND word != ?2",
-        "assonanz" => "SELECT word, lang FROM words WHERE vowels_clean = ?1 AND rhyme_part != ?2 AND word != ?3",
-        "vokalklang" => "SELECT word, lang FROM words WHERE vowels_clean = ?1 AND word != ?2",
+        "rein" => "SELECT word, lang FROM (SELECT * FROM words UNION ALL SELECT * FROM bundled_db.words) WHERE rhyme_part = ?1 AND word != ?2",
+        "assonanz" => "SELECT word, lang FROM (SELECT * FROM words UNION ALL SELECT * FROM bundled_db.words) WHERE vowels_clean = ?1 AND rhyme_part != ?2 AND word != ?3",
+        "vokalklang" => "SELECT word, lang FROM (SELECT * FROM words UNION ALL SELECT * FROM bundled_db.words) WHERE vowels_clean = ?1 AND word != ?2",
         _ => return vec![],
     };
 
     let is_lang_filtered = filter_lang.eq_ignore_ascii_case("de") || filter_lang.eq_ignore_ascii_case("en");
 
+    // Note: The inner UNION queries return rows with 'lang'. So we can filter on the outer select!
     let mut query = if is_lang_filtered {
         format!("{} AND lang = ?{}", query_base, if mode == "assonanz" { 4 } else { 3 })
     } else {

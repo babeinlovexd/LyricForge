@@ -173,8 +173,8 @@ export const RhymeHighlight = Extension.create({
 
                     const mappedMatches = result.matches.map(m => ({
                       ...m,
-                      start: mapToPm(m.start) + 1,
-                      end: mapToPm(m.end) + 1
+                      start: mapToPm(m.start),
+                      end: mapToPm(m.end)
                     }));
 
                     const tr = view.state.tr.setMeta('rhymeMatches', mappedMatches);
