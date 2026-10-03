@@ -45,8 +45,9 @@ body {
   text-underline-offset: 3px;
 }
 .hl-light-green {
-  text-decoration: underline 2px solid #4caf50;
-  text-underline-offset: 3px;
+  background-color: rgba(76, 175, 80, 0.28);
+  border-radius: 2px;
+  padding: 0 1px;
 }
 
 /* Assonanzen: standardmäßig ganz leicht gelb eingefärbt (ohne störende Unterstreichung) */
@@ -76,8 +77,12 @@ body {
 }
 .hover-active-moss-green,
 .hover-active-light-green {
-  background-color: rgba(76, 175, 80, 0.25) !important;
+  background-color: rgba(76, 175, 80, 0.38) !important;
   border-radius: 2px;
+}
+.hover-active-light-green {
+  text-decoration: underline 2px solid #4caf50 !important;
+  text-underline-offset: 3px;
 }
 
 /* Base styles for active words */

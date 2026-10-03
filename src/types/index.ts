@@ -7,6 +7,7 @@ export interface BlockData {
   customTitle: string;
   language: Language;
   content: string;
+  tags: string[];
 }
 
 export interface ProjectMetadata {

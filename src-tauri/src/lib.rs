@@ -1,5 +1,7 @@
 pub mod dictionary;
 pub mod linguistics;
+mod phonetics;
+mod ranking;
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]

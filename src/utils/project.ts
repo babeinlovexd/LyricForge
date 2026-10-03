@@ -21,12 +21,18 @@ export function parseProject(value: unknown): ProjectData {
     const id = string(b.id);
     if (!id.trim() || ids.has(id)) fail('Fehlende oder doppelte Block-ID.');
     ids.add(id);
+    const rawTags: unknown[] = b.tags === undefined ? [] : Array.isArray(b.tags) ? b.tags : fail('Tagliste muss ein Array sein.');
+    if (rawTags.length > 10) fail('Ein Block darf höchstens 10 Tags haben.');
+    const tags = rawTags.map((tag: unknown) => string(tag).trim());
+    if (tags.some(tag => !tag || tag.length > 40 || tag.includes('|'))) fail('Ungültiger Block-Tag.');
+    if (new Set(tags.map(tag => tag.toLocaleLowerCase())).size !== tags.length) fail('Doppelte Block-Tags.');
     return {
       id,
       type: choice(b.type, ['Intro', 'Verse', 'Pre-Chorus', 'Chorus', 'Bridge', 'Outro', 'Scene', 'Skit', 'Interlude', 'Custom']),
       customTitle: string(legacy ? b.customTitle ?? '' : b.customTitle),
       language: choice(legacy ? b.language ?? defaultLanguage : b.language, ['auto', 'de', 'en']),
       content: string(b.content),
+      tags,
     } as BlockData;
   });
   return { version: '1.0', metadata: { title: string(m.title), artist: string(m.artist), tempoBpm: m.tempoBpm as number,
@@ -43,6 +49,10 @@ export function blockTitles(blocks: BlockData[]): string[] {
     counts.set(block.type, count);
     return block.type + ' ' + count;
   });
+}
+
+export function blockHeaders(blocks: BlockData[]): string[] {
+  return blockTitles(blocks).map((title, index) => [title, ...(blocks[index].tags ?? [])].join(' | '));
 }
 
 export function touchProject(project: ProjectData): ProjectData {

@@ -33,7 +33,7 @@ export const BlockList: React.FC = () => {
   };
 
   return (
-    <div className="w-full max-w-4xl mx-auto p-4 pb-24">
+    <div className="w-full min-w-0 pb-24">
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}

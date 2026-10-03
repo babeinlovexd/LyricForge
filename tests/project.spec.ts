@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { parseProject, blockTitles } from '../src/utils/project';
+import { parseProject, blockHeaders, blockTitles } from '../src/utils/project';
 import { useAppStore } from '../src/store';
 
 const fresh = () => structuredClone(useAppStore.getState().project);
@@ -23,6 +23,14 @@ test('exports count each section type separately', () => {
   const b = fresh().blocks[0];
   expect(blockTitles(['Verse','Chorus','Verse','Scene','Chorus','Custom'].map(type => ({ ...b, type: type as typeof b.type, customTitle: 'Fin' }))))
     .toEqual(['Verse 1','Chorus 1','Verse 2','Scene','Chorus 2','Fin']);
+});
+test('block tags migrate, validate and appear in exported headers', () => {
+  const p = fresh();
+  const tagged = { ...p.blocks[0], tags: ['solo', 'zweiter tag', 'Outro'] };
+  expect(blockHeaders([tagged])).toEqual(['Verse 1 | solo | zweiter tag | Outro']);
+  expect(parseProject({ ...p, blocks: [{ ...tagged, tags: undefined }] }).blocks[0].tags).toEqual([]);
+  expect(() => parseProject({ ...p, blocks: [{ ...tagged, tags: Array(11).fill('tag') }] })).toThrow();
+  expect(() => parseProject({ ...p, blocks: [{ ...tagged, tags: ['solo', 'SOLO'] }] })).toThrow();
 });
 test('project edits update modified while UI changes and loading preserve it', () => {
   const initial = fresh();

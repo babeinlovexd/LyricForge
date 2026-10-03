@@ -2,6 +2,7 @@ import { Extension } from '@tiptap/core';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
 import { Decoration, DecorationSet } from '@tiptap/pm/view';
 import { invoke } from '@tauri-apps/api/core';
+import { editorText } from '../utils/editorText';
 
 export interface HighlightMatch {
   word: string;
@@ -139,24 +140,7 @@ export const RhymeHighlight = Extension.create({
                 timeout = setTimeout(async () => {
                   try {
                     // Extract text
-                    let text = '';
-                    const positions: { pmPos: number; charIdx: number }[] = [];
-                    let charIdx = 0;
-
-                    view.state.doc.descendants((node, pos) => {
-                      if (node.isText) {
-                        const nodeText = node.text || '';
-                        for (let i = 0; i < nodeText.length; i++) {
-                            positions.push({ pmPos: pos + i, charIdx: charIdx + i });
-                        }
-                        text += nodeText;
-                        charIdx += nodeText.length;
-                      } else if (node.isBlock && pos > 0) {
-                        text += '\n';
-                        positions.push({ pmPos: pos, charIdx: charIdx });
-                        charIdx += 1;
-                      }
-                    });
+                    const { text, positions } = editorText(view.state.doc, false);
 
                     // Call Tauri API
                     const result = await invoke<RhymeAnalysisResult>('analyze_rhymes', {
@@ -170,9 +154,9 @@ export const RhymeHighlight = Extension.create({
                     const mapToPm = (cIdx: number) => {
                       // fallback for bounds
                       if (cIdx >= positions.length) {
-                        return positions.length > 0 ? positions[positions.length-1].pmPos + 1 : 1;
+                        return positions.length > 0 ? positions[positions.length-1] + 1 : 1;
                       }
-                      return positions[cIdx] ? positions[cIdx].pmPos : 1;
+                      return positions[cIdx] ?? 1;
                     };
 
                     const mappedMatches = result.matches.map(m => ({

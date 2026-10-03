@@ -1,7 +1,7 @@
 import { save, open } from '@tauri-apps/plugin-dialog';
 import { writeTextFile, readTextFile } from '@tauri-apps/plugin-fs';
 import { ProjectData } from '../types';
-import { parseProject, blockTitles } from './project';
+import { parseProject, blockHeaders } from './project';
 
 export const saveProject = async (project: ProjectData) => {
   try {
@@ -13,7 +13,7 @@ export const saveProject = async (project: ProjectData) => {
       return true;
     }
   } catch (error) {
-    console.error('Failed to save project:', error);
+    throw new Error(`Projekt konnte nicht gespeichert werden: ${error instanceof Error ? error.message : String(error)}`);
   }
   return false;
 };
@@ -29,8 +29,7 @@ export const openProject = async (): Promise<ProjectData | null> => {
       return parseProject(JSON.parse(contents));
     }
   } catch (error) {
-    console.error('Failed to open project:', error);
-    window.alert(error instanceof Error ? error.message : 'Projekt konnte nicht geöffnet werden.');
+    throw new Error(`Projekt konnte nicht geöffnet werden: ${error instanceof Error ? error.message : String(error)}`);
   }
   return null;
 };
@@ -44,7 +43,7 @@ export const exportToMarkdown = async (project: ProjectData) => {
     if (filePath) {
       let content = `# ${project.metadata.title}\nArtist: ${project.metadata.artist}\nTempo: ${project.metadata.tempoBpm} BPM\n\n`;
 
-      const titles = blockTitles(project.blocks);
+      const titles = blockHeaders(project.blocks);
       project.blocks.forEach((block, idx) => {
         const title = titles[idx];
         content += `## ${title}\n`;
@@ -55,7 +54,7 @@ export const exportToMarkdown = async (project: ProjectData) => {
       return true;
     }
   } catch (error) {
-    console.error('Failed to export to markdown:', error);
+    throw new Error(`Markdown-Export fehlgeschlagen: ${error instanceof Error ? error.message : String(error)}`);
   }
   return false;
 };
@@ -69,7 +68,7 @@ export const exportToText = async (project: ProjectData) => {
     if (filePath) {
       let content = `${project.metadata.title} - ${project.metadata.artist}\n\n`;
 
-      const titles = blockTitles(project.blocks);
+      const titles = blockHeaders(project.blocks);
       project.blocks.forEach((block, idx) => {
         const title = titles[idx];
         content += `[${title}]\n`;
@@ -80,7 +79,7 @@ export const exportToText = async (project: ProjectData) => {
       return true;
     }
   } catch (error) {
-    console.error('Failed to export to text:', error);
+    throw new Error(`Text-Export fehlgeschlagen: ${error instanceof Error ? error.message : String(error)}`);
   }
   return false;
 };

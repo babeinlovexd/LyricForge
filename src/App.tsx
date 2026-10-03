@@ -2,35 +2,18 @@ import { BlockList } from "./components/BlockList";
 import { Sidebar } from "./components/Sidebar";
 import { useAppStore } from "./store";
 import { useState } from "react";
-import { openProject, saveProject, exportToMarkdown, exportToText } from "./utils/fileManager";
-import { Eye, EyeOff, Download, ChevronDown } from "lucide-react";
+import { useProjectFiles } from "./utils/useProjectFiles";
+import { Eye, EyeOff, Download, ChevronDown, Info } from "lucide-react";
 
 function App() {
-  const { project, setProject, setMetadata, showHighlights, toggleHighlights } = useAppStore();
+  const { project, setMetadata, showHighlights, toggleHighlights } = useAppStore();
   const [exportOpen, setExportOpen] = useState(false);
 
-  const handleOpen = async () => {
-    const loaded = await openProject();
-    if (loaded) {
-      setProject(loaded);
-    }
-  };
-
-  const handleSave = async () => {
-    await saveProject(project);
-  };
-
-  const handleExportMd = async () => {
-    await exportToMarkdown(project);
-  };
-
-  const handleExportTxt = async () => {
-    await exportToText(project);
-  };
+  const { busy, status, message, error, handleOpen, handleSave, handleExportMd, handleExportTxt } = useProjectFiles();
 
   return (
     <div className="h-screen w-screen bg-[#121212] text-white flex flex-col overflow-hidden">
-      <header className="shrink-0 w-full p-4 border-b border-[#2a2a2a] bg-[#1a1a1a] flex justify-between items-center relative z-30">
+      <header className="shrink-0 w-full p-4 border-b border-[#2a2a2a] bg-[#1a1a1a] flex flex-wrap gap-3 justify-between items-center relative z-30">
         <div className="flex items-center gap-4 pl-4">
           <img src="/LF.png" alt="LyricForge Logo" className="h-16 w-auto object-contain drop-shadow-md" />
           <div>
@@ -43,7 +26,7 @@ function App() {
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-2 pr-4">
+        <fieldset disabled={busy} className="flex flex-wrap gap-2 pr-4 disabled:opacity-60">
             <button onClick={handleOpen} className="flex items-center gap-2 bg-[#1a1a1a] hover:bg-[#2a2a2a] border border-[#3a3a3a] text-sm px-4 py-2 rounded-md font-medium transition-all shadow-sm">
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
               Öffnen
@@ -94,26 +77,39 @@ function App() {
               )}
             </div>
 
-        </div>
+        </fieldset>
       </header>
 
+      <div className="shrink-0 px-4 py-1 text-xs border-b border-[#333] bg-[#181818]">
+        <div role="status" aria-label="Speicherstatus" aria-live="polite">{busy ? 'Dateivorgang läuft …' : status}{message ? ` · ${message}` : ''}</div>
+        {error && <div role="alert" className="text-red-300 py-1">{error}</div>}
+      </div>
+
       <div className="flex-1 flex flex-row overflow-hidden min-h-0 relative">
-        <main className="flex-1 min-w-0 overflow-y-auto p-4 min-h-0 w-full max-w-4xl mx-auto">
+        <main className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden p-4 min-h-0">
           <div className="mb-6 flex gap-4">
             <input
               type="text"
               placeholder="Song Titel"
               value={project.metadata.title}
               onChange={(e) => setMetadata({ title: e.target.value })}
-              className="bg-transparent text-2xl font-bold border-b border-[#444] focus:border-green-500 outline-none pb-1 flex-1 placeholder-gray-600 transition-colors"
+              className="bg-transparent text-2xl font-bold border-b border-[#444] focus:border-green-500 outline-none pb-1 flex-1 min-w-0 placeholder-gray-600 transition-colors"
             />
             <input
               type="text"
               placeholder="Künstler / Autor"
               value={project.metadata.artist}
               onChange={(e) => setMetadata({ artist: e.target.value })}
-              className="bg-transparent text-xl font-medium text-gray-400 border-b border-[#444] focus:border-green-500 outline-none pb-1 w-1/3 placeholder-gray-600 transition-colors"
+              className="bg-transparent text-xl font-medium text-gray-400 border-b border-[#444] focus:border-green-500 outline-none pb-1 w-1/3 min-w-0 placeholder-gray-600 transition-colors"
             />
+          </div>
+          <div aria-label="Legende der Reim-Markierungen" className="mb-4 flex flex-wrap items-center gap-x-5 gap-y-2 rounded-md border border-[#303030] bg-[#181818] px-3 py-2 text-xs text-gray-300">
+            <span className="flex items-center gap-1.5 text-gray-500"><Info size={14} /> Farben:</span>
+            <span className="flex items-center gap-2"><span className="hl-moss-green font-semibold">Wort</span> Reiner Endreim</span>
+            <span className="flex items-center gap-2"><span className="hl-light-green font-semibold">Wort</span> Reiner Binnenreim</span>
+            <span className="flex items-center gap-2"><span className="hl-yellow font-semibold">Wort</span> Assonanz</span>
+            <span className="flex items-center gap-2"><span className="hl-purple font-semibold">Wort</span> Vokalklang</span>
+            <span className="text-gray-500">Beim Darüberfahren werden direkte Partner hervorgehoben.</span>
           </div>
           <BlockList />
         </main>

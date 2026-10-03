@@ -49,6 +49,7 @@ const defaultProject: ProjectData = {
       customTitle: "",
       language: "auto",
       content: "Ich laufe durch die kalte Nacht\nBis tief in mir ein Funke wacht",
+      tags: [],
     }
   ],
 };
@@ -81,6 +82,7 @@ export const useAppStore = create<AppState>((set) => ({
       customTitle: "",
       language: state.project.settings.defaultLanguage,
       content: "",
+      tags: [],
     };
 
     const blocks = [...state.project.blocks];
