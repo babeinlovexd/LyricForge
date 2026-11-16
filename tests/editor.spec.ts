@@ -210,7 +210,7 @@ test('legacy block settings do not restrict analysis or All search', async ({pag
   await expect(page.locator('select')).toHaveCount(1);
   const calls=await page.evaluate(()=>(window as any).calls);
   expect(calls.filter((c:any)=>['analyze_rhymes','calculate_syllables'].includes(c.command)).every((c:any)=>c.lang==='auto')).toBe(true);
-  await page.locator('.hl-yellow').dblclick();
+  await page.locator('[contenteditable=true] .hl-yellow').dblclick();
   await expect.poll(()=>page.evaluate(()=>(window as any).calls.filter((c:any)=>c.command==='find_rhymes_for_word').at(-1)?.lang)).toBe('auto');
   await expect(page.getByText('[1–2]',{exact:true})).toBeVisible();
 });
@@ -264,7 +264,7 @@ test('Shift+Enter preserves line breaks in saved content and both analyses', asy
 test('long titles, lyrics and suggestions cannot push the sidebar outside the window', async ({page}) => {
   await page.setViewportSize({width:960,height:800});
   await page.evaluate(() => { (window as any).suggestionWord = 'Donaudampfschifffahrt'.repeat(12); });
-  await page.locator('.hl-yellow').dblclick();
+  await page.locator('[contenteditable=true] .hl-yellow').dblclick();
   await page.getByPlaceholder('Song Titel').fill('Ein sehr langer Titel '.repeat(20));
   await page.locator('[contenteditable=true]').fill('EinlangesWort'.repeat(80));
   const sidebar=page.getByRole('complementary',{name:'Reim-Helfer'});
@@ -277,7 +277,7 @@ test('long titles, lyrics and suggestions cannot push the sidebar outside the wi
 
 for(const width of [1920,1520,1280,960])test('sidebar keeps toolbar and export usable at '+width,async({page})=>{
   await page.setViewportSize({width,height:800});
-  await page.locator('.hl-yellow').dblclick();
+  await page.locator('[contenteditable=true] .hl-yellow').dblclick();
   const title=page.getByRole('heading',{name:'Reim-Helfer'});
   await expect(title).toBeVisible();
   const header=await page.locator('header').boundingBox();
