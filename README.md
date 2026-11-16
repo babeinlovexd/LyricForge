@@ -1,4 +1,10 @@
+<p align="center">
+  <a href="https://github.com/babeinlovexd"><img src="https://raw.githubusercontent.com/babeinlovexd/babeinlovexd/main/bxd-github-header.svg" width="520" alt="BxD / BabeinlovexD"></a>
+</p>
+
 # LyricForge
+
+[Fragen & Fehler](https://github.com/babeinlovexd/LyricForge/issues)
 
 ![LyricForge Logo](public/LF.png)
 
@@ -84,3 +90,15 @@ Die App benötigt kein Python. Zum erneuten Erzeugen der Daten wird eine separat
     Ein Klick auf einen Vorschlag ersetzt die Auswahl oder fügt ihn an der zuletzt aktiven Cursorposition ein. Strg+Z macht die Änderung rückgängig. Die Kategorien „Rein“, „Assonanz“ und „Vokalklang“ nutzen dieselben Klangregeln wie die Editoranalyse; deren Stopwort- und Zeilenabstandsregeln gelten nur im Textkontext.
 4.  **Blöcke organisieren:** Nutze das Drag-Handle (die Punkte links am Block), um ihn per Drag-and-Drop zu verschieben.
 5.  **Speichern & Exportieren:** Nutze die Buttons oben rechts, um dein Projekt als `.lyricproj` zu sichern oder den Text zu exportieren.
+
+---
+
+## Builds und Releases
+
+Version: **0.1.0** ([VERSION](VERSION)). [GitHub Actions](.github/workflows/release.yml) prüft Pushes und Pull Requests. Ein Tag passend zu `v` + `VERSION` veröffentlicht das Release erst nach erfolgreichen Jobs; manuelle Läufe liefern Build-Artefakte. [Downloads](https://github.com/babeinlovexd/LyricForge/releases).
+
+## Mitmachen
+
+Fragen, Fehlerberichte und Beiträge sind willkommen. Nenne bei einem [Issue](https://github.com/babeinlovexd/LyricForge/issues) bitte Version, Aufbau und Schritte zum Nachstellen. Größere Änderungen besprechen wir am besten vor einem Pull Request.
+
+[BxD / BabeinlovexD](https://github.com/babeinlovexd) · [Website](https://babeinlovexd.de/)

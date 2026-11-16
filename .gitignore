@@ -35,3 +35,6 @@ build_large_db.py
 # Automated test reports
 test-results/
 playwright-report/
+
+# Local build verification and CI staging
+release-output/
